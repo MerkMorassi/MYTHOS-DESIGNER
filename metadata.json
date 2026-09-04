@@ -1,0 +1,6 @@
+{
+  "name": "MythOS Design Engine",
+  "description": "MythOS Componentized UI/UX Design System and Master Systems Display (MSD) Layout Engine",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

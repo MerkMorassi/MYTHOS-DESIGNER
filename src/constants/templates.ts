@@ -1,0 +1,172 @@
+import { MSDLayoutManifest } from '../types/msd';
+
+export const DEFAULT_LAYOUT_MANIFEST: MSDLayoutManifest = {
+  $schema: 'https://mythos.engine/schemas/ui-builder-v1.json',
+  layoutId: 'helios-core-msd-01',
+  name: 'Quantum Core & System Command Console',
+  theme: 'noir-dark',
+  header: {
+    title: 'MythOS // COMMAND MATRIX WORKSTATION',
+    authorizationCode: 'AUTHORIZED // SYNC-CLEARANCE LEVEL A',
+    stardate: '103987.42 CY-SEC',
+    subTitle: 'PRIMARY QUANTUM CORE & THERMODYNAMIC COHERENCE MONITOR',
+  },
+  navigation: [
+    { id: 'sec-01', label: '01 - SYSTEM MSD', target: 'msd-canvas', active: true },
+    { id: 'sec-02', label: '02 - LATTICE FORGE', target: 'lattice-inspector', active: false },
+    { id: 'sec-03', label: '03 - ENTROPY SPECTRUM', target: 'entropy-heatmap', active: false },
+    { id: 'sec-04', label: '04 - TACTICAL GRID', target: 'tactical-grid', active: false },
+  ],
+  msdCanvas: {
+    schematicAsset: 'quantum_core',
+    schematicType: 'quantum_core',
+    overlayType: 'thermodynamic',
+    nodes: [
+      {
+        id: 'node-01',
+        label: 'COHERENCE FIELD',
+        x: 28,
+        y: 28,
+        metricKey: 'coherenceFactor',
+        description: 'Primary quantum confinement field phase matrix',
+        status: 'nominal',
+      },
+      {
+        id: 'node-02',
+        label: 'ENTROPY DENSITY',
+        x: 68,
+        y: 35,
+        metricKey: 'meanEntropyDensity',
+        description: 'Microstate entropy accumulation rate per nanosecond',
+        status: 'nominal',
+      },
+      {
+        id: 'node-03',
+        label: 'FIELD FLUX',
+        x: 48,
+        y: 50,
+        metricKey: 'warpFieldFlux',
+        description: 'Subspace bubble compression ratio and vector harmonics',
+        status: 'nominal',
+      },
+      {
+        id: 'node-04',
+        label: 'PLASMA INJECTION',
+        x: 22,
+        y: 72,
+        metricKey: 'plasmaFlowRate',
+        description: 'Electro-plasma transfer manifold flow pressure',
+        status: 'nominal',
+      },
+      {
+        id: 'node-05',
+        label: 'SHIELD HARMONICS',
+        x: 78,
+        y: 70,
+        metricKey: 'shieldHarmonics',
+        description: 'Multiphasic shield array frequency coherence',
+        status: 'nominal',
+      },
+      {
+        id: 'node-06',
+        label: 'CORE COOLANT',
+        x: 50,
+        y: 84,
+        metricKey: 'coolantPressure',
+        description: 'Cryogenic quantum coolant flow rate & reservoir status',
+        status: 'nominal',
+      },
+    ],
+  },
+  geometryParams: {
+    outerElbowRadius: 32,
+    innerElbowRadius: 16,
+    padding: 16,
+    barGap: 4,
+  },
+};
+
+export const TEMPLATE_PRESETS: Record<string, MSDLayoutManifest> = {
+  quantumCore: DEFAULT_LAYOUT_MANIFEST,
+  neuralLattice: {
+    ...DEFAULT_LAYOUT_MANIFEST,
+    layoutId: 'neural-lattice-forge-02',
+    name: 'Neural Lattice Synthesizer',
+    theme: 'hyperion-blue',
+    header: {
+      title: 'MythOS // NEURAL LATTICE FORGE',
+      authorizationCode: 'CLEARANCE LEVEL 9',
+      stardate: '103988.10 CY-SEC',
+      subTitle: 'SYNAPTIC WEAVE & ANTIMATTER MATRIX',
+    },
+    navigation: [
+      { id: 'sec-01', label: '01 - NEURAL WEAVE', target: 'msd-canvas', active: true },
+      { id: 'sec-02', label: '02 - COGNITION NODES', target: 'nodes', active: false },
+      { id: 'sec-03', label: '03 - ENTROPY METRICS', target: 'metrics', active: false },
+    ],
+    msdCanvas: {
+      schematicAsset: 'neural_lattice',
+      schematicType: 'neural_lattice',
+      overlayType: 'coherence',
+      nodes: [
+        { id: 'nl-01', label: 'SYNAPTIC DENSITY', x: 30, y: 30, metricKey: 'coherenceFactor', status: 'nominal' },
+        { id: 'nl-02', label: 'SUBSPACE BANDWIDTH', x: 70, y: 30, metricKey: 'subspaceBandwidth', status: 'nominal' },
+        { id: 'nl-03', label: 'CORE TEMP', x: 50, y: 65, metricKey: 'coreTemperature', status: 'nominal' },
+      ],
+    },
+  },
+  tacticalGrid: {
+    ...DEFAULT_LAYOUT_MANIFEST,
+    layoutId: 'tactical-hud-03',
+    name: 'Defensive Tactical Array',
+    theme: 'obsidian-void',
+    header: {
+      title: 'TACTICAL COMMAND // DEFENSIVE MATRIX',
+      authorizationCode: 'ALERT MODE // ARMED',
+      stardate: '103988.95 CY-SEC',
+      subTitle: 'DEFLECTION HARMONICS & FLUX DENSITY',
+    },
+    navigation: [
+      { id: 'sec-01', label: '01 - DEFENSIVE GRID', target: 'msd-canvas', active: true },
+      { id: 'sec-02', label: '02 - EMITTER FLUX', target: 'phasers', active: false },
+      { id: 'sec-03', label: '03 - ANOMALY TRACKER', target: 'anomaly', active: false },
+    ],
+    msdCanvas: {
+      schematicAsset: 'bridge_command',
+      schematicType: 'bridge_command',
+      overlayType: 'shield_harmonics',
+      nodes: [
+        { id: 'tac-01', label: 'SHIELD FREQUENCY', x: 25, y: 40, metricKey: 'shieldHarmonics', status: 'warning' },
+        { id: 'tac-02', label: 'FIELD FLUX', x: 75, y: 40, metricKey: 'warpFieldFlux', status: 'nominal' },
+        { id: 'tac-03', label: 'ENTROPY SPIKE', x: 50, y: 75, metricKey: 'meanEntropyDensity', status: 'critical' },
+      ],
+    },
+  },
+  monochromeDark: {
+    ...DEFAULT_LAYOUT_MANIFEST,
+    layoutId: 'monochrome-stealth-01',
+    name: 'Noir Monochromatic Operations',
+    theme: 'noir-dark',
+    header: {
+      title: 'MythOS // MONOCHROMATIC OPERATIONS CONSOLE',
+      authorizationCode: 'RESTRICTED // BLACK-OPS ARCH',
+      stardate: '103989.01 CY-SEC',
+      subTitle: '#000 CANVAS // #111 PANELS // #222 SURFACES // #333 BORDERS // #444 CONTROLS',
+    },
+    navigation: [
+      { id: 'sec-01', label: '01 - NOIR MONITOR', target: 'msd-canvas', active: true },
+      { id: 'sec-02', label: '02 - CORE TELEMETRY', target: 'core-telemetry', active: false },
+      { id: 'sec-03', label: '03 - FLUX SENSORS', target: 'flux-sensors', active: false },
+    ],
+    msdCanvas: {
+      schematicAsset: 'quantum_core',
+      schematicType: 'quantum_core',
+      overlayType: 'coherence',
+      nodes: [
+        { id: 'noir-01', label: 'COHERENCE MATRIX', x: 30, y: 32, metricKey: 'coherenceFactor', status: 'nominal' },
+        { id: 'noir-02', label: 'ENTROPY FIELD', x: 70, y: 32, metricKey: 'meanEntropyDensity', status: 'nominal' },
+        { id: 'noir-03', label: 'THERMAL FLUX', x: 50, y: 68, metricKey: 'coreTemperature', status: 'nominal' },
+      ],
+    },
+  },
+};
