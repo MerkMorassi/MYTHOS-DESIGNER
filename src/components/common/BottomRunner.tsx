@@ -13,16 +13,28 @@ interface BottomRunnerProps {
 
 export const BottomRunner: React.FC<BottomRunnerProps> = ({
   currentTheme,
-  stardate = '103987.42',
+  stardate = '2026-09-04',
   onRefreshData,
 }) => {
   const theme = THEMES[currentTheme];
   const [timestamp, setTimestamp] = useState<string>('');
+  const [currentDate, setCurrentDate] = useState<string>('');
 
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      setTimestamp(now.toISOString().split('T')[1].slice(0, 8) + ' UTC');
+      const timeStr = now.toLocaleTimeString([], {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+      setTimestamp(`${timeStr} LOCAL`);
+
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      setCurrentDate(`${year}-${month}-${day}`);
     };
     updateTime();
     const timer = setInterval(updateTime, 1000);
@@ -67,12 +79,12 @@ export const BottomRunner: React.FC<BottomRunnerProps> = ({
 
         <div className="flex items-center gap-3">
           <div className="text-slate-400">
-            <span className="mr-1">STARDATE:</span>
-            <span className="text-yellow-400 font-bold">{stardate}</span>
+            <span className="mr-1">SYS-DATE:</span>
+            <span className="text-yellow-400 font-bold">{currentDate || stardate}</span>
           </div>
 
           <div className="hidden md:inline text-slate-400">
-            <span>TIME:</span>
+            <span>SYS-TIME:</span>
             <span className="text-slate-300 ml-1 font-bold">{timestamp}</span>
           </div>
 

@@ -3,7 +3,8 @@ import { AppMode, MSDHeader, ThemeId } from '../../types/msd';
 import { THEMES } from '../../constants/themes';
 import { PillboxButton } from './PillboxButton';
 import { soundEngine } from '../../utils/audio';
-import { Volume2, VolumeX, Sparkles, Sliders, ShieldCheck, Layers, Cpu, Mic } from 'lucide-react';
+import { TemplatePresetDropdown } from './TemplatePresetDropdown';
+import { Volume2, VolumeX, Sparkles, Sliders, ShieldCheck, Layers, Cpu, Mic, MicOff, Power } from 'lucide-react';
 
 interface ArchHeaderProps {
   headerData: MSDHeader;
@@ -11,6 +12,14 @@ interface ArchHeaderProps {
   onThemeChange: (theme: ThemeId) => void;
   appMode: AppMode;
   onAppModeChange: (mode: AppMode) => void;
+  onOpenThemeForge?: () => void;
+  onSelectTemplate?: (templateKey: string) => void;
+  currentTemplateId?: string;
+  voiceActive?: boolean;
+  voiceMicActive?: boolean;
+  voiceSpeaking?: boolean;
+  onToggleVoiceMic?: () => void;
+  onDisconnectVoice?: () => void;
 }
 
 export const ArchHeader: React.FC<ArchHeaderProps> = ({
@@ -19,18 +28,55 @@ export const ArchHeader: React.FC<ArchHeaderProps> = ({
   onThemeChange,
   appMode,
   onAppModeChange,
+  onOpenThemeForge,
+  onSelectTemplate,
+  currentTemplateId,
+  voiceActive,
+  voiceMicActive,
+  voiceSpeaking: _voiceSpeaking,
+  onToggleVoiceMic,
+  onDisconnectVoice,
 }) => {
   const [audioEnabled, setAudioEnabled] = useState(soundEngine.enabled);
-  const [stardate, setStardate] = useState(headerData.stardate);
-  const theme = THEMES[currentTheme];
+  const [isEditorExpanded, setIsEditorExpanded] = useState<boolean>(true);
+  const [localSystemTime, setLocalSystemTime] = useState<string>('');
+  const [localSystemDate, setLocalSystemDate] = useState<string>('');
+  const [, setThemesVersion] = useState<number>(0);
+  const theme = THEMES[currentTheme] || THEMES['noir-dark'];
 
-  // Update stardate dynamically
+  // Listen to custom theme registry events
   useEffect(() => {
-    const interval = setInterval(() => {
+    const handleThemeUpdate = () => {
+      setThemesVersion((v) => v + 1);
+    };
+    window.addEventListener('mythos_theme_registered', handleThemeUpdate);
+    window.addEventListener('mythos_theme_deleted', handleThemeUpdate);
+    return () => {
+      window.removeEventListener('mythos_theme_registered', handleThemeUpdate);
+      window.removeEventListener('mythos_theme_deleted', handleThemeUpdate);
+    };
+  }, []);
+
+  // Update local system time and date dynamically
+  useEffect(() => {
+    const updateTimes = () => {
       const now = new Date();
-      const sd = (103900 + (now.getTime() % 8640000) / 86400).toFixed(2);
-      setStardate(sd);
-    }, 2000);
+      const timeStr = now.toLocaleTimeString([], {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+      setLocalSystemTime(`${timeStr} LOCAL`);
+
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      setLocalSystemDate(`${year}-${month}-${day}`);
+    };
+
+    updateTimes();
+    const interval = setInterval(updateTimes, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -44,8 +90,8 @@ export const ArchHeader: React.FC<ArchHeaderProps> = ({
 
   return (
     <header className="w-full flex flex-col gap-1 select-none">
-      {/* Upper Status & App Mode Navigation Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-2 py-1 bg-[#0b0e14] border-b border-[#2f3749] text-xs">
+      {/* Upper Status Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-[#0b0e14] border-b border-[#2f3749] text-xs">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 font-mono-data text-cyan-400">
             <ShieldCheck className="w-4 h-4 text-emerald-400 animate-pulse" />
@@ -54,82 +100,81 @@ export const ArchHeader: React.FC<ArchHeaderProps> = ({
           <span className="text-[#2f3749]">|</span>
           <div className="hidden sm:flex items-center gap-2 font-mono-data text-slate-400">
             <span>SYS-TIME:</span>
-            <span className="text-yellow-400 font-bold">{stardate}</span>
+            <span className="text-yellow-400 font-bold">{localSystemTime}</span>
+          </div>
+          <span className="hidden md:inline text-[#2f3749]">|</span>
+          <div className="hidden md:flex items-center gap-2 font-mono-data text-slate-400">
+            <span>SYS-DATE:</span>
+            <span className="text-cyan-400 font-bold">{localSystemDate}</span>
           </div>
         </div>
 
-        {/* Primary Engine Mode Switcher */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-          <PillboxButton
-            size="sm"
-            active={appMode === 'msd-view'}
-            onClick={() => onAppModeChange('msd-view')}
-            color={appMode === 'msd-view' ? theme.colors.accent : theme.colors.secondary}
-          >
-            <Layers className="w-3.5 h-3.5 inline mr-1" />
-            01. MSD DISPLAY
-          </PillboxButton>
-
-          <PillboxButton
-            size="sm"
-            active={appMode === 'ui-builder'}
-            onClick={() => onAppModeChange('ui-builder')}
-            color={appMode === 'ui-builder' ? theme.colors.accent : theme.colors.secondary}
-          >
-            <Sliders className="w-3.5 h-3.5 inline mr-1" />
-            02. UI BUILDER
-          </PillboxButton>
-
-          <PillboxButton
-            size="sm"
-            active={appMode === 'token-inspector'}
-            onClick={() => onAppModeChange('token-inspector')}
-            color={appMode === 'token-inspector' ? theme.colors.accent : theme.colors.secondary}
-          >
-            <Cpu className="w-3.5 h-3.5 inline mr-1" />
-            03. TOKEN LAB
-          </PillboxButton>
-
-          <PillboxButton
-            size="sm"
-            active={appMode === 'ai-diagnostics'}
-            onClick={() => onAppModeChange('ai-diagnostics')}
-            color={appMode === 'ai-diagnostics' ? theme.colors.accent : theme.colors.secondary}
-          >
-            <Sparkles className="w-3.5 h-3.5 inline mr-1 text-yellow-400" />
-            04. AI DIAGNOSTIC
-          </PillboxButton>
-
-          <PillboxButton
-            size="sm"
-            active={appMode === 'voice-control'}
-            onClick={() => onAppModeChange('voice-control')}
-            color={appMode === 'voice-control' ? theme.colors.accent : theme.colors.secondary}
-          >
-            <Mic className="w-3.5 h-3.5 inline mr-1 text-emerald-400" />
-            05. VOICE CONTROL
-          </PillboxButton>
-        </div>
-
-        {/* Theme & Audio Controls */}
+        {/* Mode Toggle (+ / -), Voice Live HUD & Audio Toggle */}
         <div className="flex items-center gap-2">
-          {/* Theme Selector Dropdown */}
-          <select
-            value={currentTheme}
-            onChange={(e) => {
-              soundEngine.playToggle();
-              onThemeChange(e.target.value as ThemeId);
-            }}
-            className="bg-[#111111] border border-[#333333] text-xs font-antonio font-bold uppercase text-slate-300 px-2 py-1 rounded-sm focus:outline-none focus:border-blue-500 cursor-pointer"
-          >
-            {Object.values(THEMES).map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+          {/* Persistent Live Voice Status Widget when voice is active */}
+          {voiceActive && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#06141c] border border-emerald-500/50 text-[11px] font-mono-data text-emerald-400 shadow-sm animate-pulse">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="font-bold tracking-wider hidden sm:inline text-emerald-300">VOICE LIVE</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleVoiceMic?.();
+                }}
+                className={`p-1 rounded cursor-pointer transition-colors ${
+                  voiceMicActive
+                    ? 'text-emerald-400 hover:text-emerald-200 bg-emerald-950/60 border border-emerald-700/60'
+                    : 'text-amber-400 hover:text-amber-200 bg-amber-950/60 border border-amber-700/60'
+                }`}
+                title={voiceMicActive ? 'Mute Microphone' : 'Unmute Microphone'}
+              >
+                {voiceMicActive ? <Mic className="w-3 h-3" /> : <MicOff className="w-3 h-3" />}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDisconnectVoice?.();
+                }}
+                className="p-1 rounded text-red-400 hover:text-red-200 hover:bg-red-950/60 border border-transparent hover:border-red-800 transition-colors cursor-pointer"
+                title="Disconnect Voice Uplink"
+              >
+                <Power className="w-3 h-3" />
+              </button>
+            </div>
+          )}
 
-          {/* Sound Toggle */}
+          {/* Show / Hide Toggle between Editor Mode and Preview Actual Theme */}
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playToggle();
+              setIsEditorExpanded(!isEditorExpanded);
+            }}
+            className="px-2 py-1 text-xs font-mono-data font-bold rounded-sm border flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:brightness-125"
+            style={{
+              backgroundColor: isEditorExpanded ? `${theme.colors.accent}15` : `${theme.colors.primary}25`,
+              borderColor: isEditorExpanded ? theme.colors.accent : theme.colors.primary,
+              color: isEditorExpanded ? theme.colors.accent : theme.colors.primary,
+            }}
+            title={
+              isEditorExpanded
+                ? '[-] Hide editor controls to preview actual theme'
+                : '[+] Show editor controls (Editor Mode)'
+            }
+          >
+            <span className="text-sm font-black leading-none w-3 text-center">
+              {isEditorExpanded ? '−' : '+'}
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">
+              {isEditorExpanded ? 'PREVIEW THEME' : 'EDITOR MODE'}
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={toggleAudio}
@@ -140,6 +185,98 @@ export const ArchHeader: React.FC<ArchHeaderProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Editor Controls: Nav Elements & Switch Template Preset (Show/Hide via + and -) */}
+      {isEditorExpanded && (
+        <>
+          {/* Header Nav Elements DIV: 100% Width */}
+          <div className="w-full bg-[#070b12] p-1.5 rounded-sm border border-[#1f293d]">
+            <nav className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
+              <PillboxButton
+                size="sm"
+                active={appMode === 'msd-view'}
+                onClick={() => onAppModeChange('msd-view')}
+                color={appMode === 'msd-view' ? theme.colors.accent : theme.colors.secondary}
+              >
+                <Layers className="w-3.5 h-3.5 inline mr-1" />
+                01. MSD DISPLAY
+              </PillboxButton>
+
+              <PillboxButton
+                size="sm"
+                active={appMode === 'ui-builder'}
+                onClick={() => onAppModeChange('ui-builder')}
+                color={appMode === 'ui-builder' ? theme.colors.accent : theme.colors.secondary}
+              >
+                <Sliders className="w-3.5 h-3.5 inline mr-1" />
+                02. UI BUILDER
+              </PillboxButton>
+
+              <PillboxButton
+                size="sm"
+                active={appMode === 'token-inspector'}
+                onClick={() => onAppModeChange('token-inspector')}
+                color={appMode === 'token-inspector' ? theme.colors.accent : theme.colors.secondary}
+              >
+                <Cpu className="w-3.5 h-3.5 inline mr-1" />
+                03. TOKEN LAB
+              </PillboxButton>
+
+              <PillboxButton
+                size="sm"
+                active={appMode === 'ai-diagnostics'}
+                onClick={() => onAppModeChange('ai-diagnostics')}
+                color={appMode === 'ai-diagnostics' ? theme.colors.accent : theme.colors.secondary}
+              >
+                <Sparkles className="w-3.5 h-3.5 inline mr-1 text-yellow-400" />
+                04. AI DIAGNOSTIC
+              </PillboxButton>
+
+              <PillboxButton
+                size="sm"
+                active={appMode === 'voice-control'}
+                onClick={() => onAppModeChange('voice-control')}
+                color={appMode === 'voice-control' ? theme.colors.accent : voiceActive ? '#10b981' : theme.colors.secondary}
+              >
+                <Mic className={`w-3.5 h-3.5 inline mr-1 ${voiceActive ? 'text-emerald-400 animate-pulse' : 'text-emerald-400'}`} />
+                05. VOICE CONTROL
+                {voiceActive && (
+                  <span className="ml-1 px-1 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse">
+                    LIVE
+                  </span>
+                )}
+              </PillboxButton>
+
+              <PillboxButton
+                size="sm"
+                onClick={() => {
+                  soundEngine.playChime();
+                  if (onOpenThemeForge) onOpenThemeForge();
+                }}
+                color={theme.colors.accent}
+              >
+                <Sparkles className="w-3.5 h-3.5 inline mr-1 text-amber-400 animate-pulse" />
+                06. SKETCH THEME
+              </PillboxButton>
+            </nav>
+          </div>
+
+          {/* Positioned Under Nav: SWITCH TEMPLATE PRESET */}
+          <div className="w-full flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-sm bg-[#060a14] border border-[#1b2537] text-xs font-mono-data">
+            <TemplatePresetDropdown
+              currentLayoutId={currentTemplateId || 'helios-core-msd-01'}
+              currentTheme={currentTheme}
+              onSelectPreset={onSelectTemplate ? onSelectTemplate : onThemeChange}
+              showLabel={true}
+              compact={false}
+            />
+            <div className="flex items-center gap-2 text-slate-400 text-[11px]">
+              <span className="text-slate-500 uppercase">ACTIVE THEME:</span>
+              <span className="text-amber-300 font-bold">{theme.name}</span>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Main Curved Arch Frame Header */}
       <div className="relative w-full flex items-stretch min-h-[54px] rounded-t-xl overflow-hidden bg-[#0a0a0a] border-t-2 border-[#333333]">

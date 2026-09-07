@@ -42,7 +42,7 @@ export const ${manifest.layoutId.replace(/[^a-zA-Z0-9]/g, '_')}_MSD = () => {
       </div>
 
       <footer className="text-xs font-mono text-slate-400 flex justify-between pt-2 border-t border-[#2f3749]">
-        <span>SYS-TIME: {manifest.header.stardate}</span>
+        <span>SYS-DATE: {manifest.header.stardate}</span>
         <span>THEME: {manifest.theme}</span>
       </footer>
     </div>

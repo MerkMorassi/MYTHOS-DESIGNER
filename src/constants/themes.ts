@@ -116,4 +116,132 @@ export const THEMES: Record<ThemeId, ThemeConfig> = {
     pillboxSecondaryClass: 'bg-[#292524] text-[#f97316] hover:bg-[#ea580c] hover:text-white',
     glowColor: 'rgba(249, 115, 22, 0.4)',
   },
+  'crt-phosphor': {
+    id: 'crt-phosphor',
+    name: 'Phosphor Green (Legacy CRT Sketch)',
+    era: 'Retro Terminal // Monochrome CRT Vector Display',
+    colors: {
+      bgObsidian: '#020a04',
+      bgSlate: '#07160b',
+      border: '#13351b',
+      primary: '#22c55e',
+      secondary: '#15803d',
+      accent: '#4ade80',
+      alert: '#ef4444',
+      gold: '#a3e635',
+      live: '#22c55e',
+      text: '#dcfce7',
+      textMuted: '#86efac',
+    },
+    archHeaderClass: 'bg-gradient-to-r from-[#22c55e] via-[#15803d] to-[#052e16] text-black',
+    elbowClass: 'bg-[#22c55e]',
+    pillboxPrimaryClass: 'bg-[#22c55e] text-black hover:bg-[#4ade80]',
+    pillboxSecondaryClass: 'bg-[#07160b] text-[#4ade80] hover:bg-[#15803d] hover:text-white border border-[#13351b]',
+    glowColor: 'rgba(34, 197, 94, 0.45)',
+    fonts: {
+      display: 'Share Tech Mono, monospace',
+      mono: 'Share Tech Mono, monospace',
+      body: 'Share Tech Mono, monospace',
+    },
+    source: {
+      type: 'sketch',
+      summary: 'Synthesized from 1980s monochrome vector display blueprint and CRT phosphor swatches.',
+      timestamp: '2026-09-04',
+    },
+    isCustom: true,
+  },
+  'voyager-violet': {
+    id: 'voyager-violet',
+    name: 'Voyager Violet (PADD Wireframe)',
+    era: 'Deep Range PADD // Subspace Optical Matrix',
+    colors: {
+      bgObsidian: '#090514',
+      bgSlate: '#130d24',
+      border: '#3b2064',
+      primary: '#a855f7',
+      secondary: '#7e22ce',
+      accent: '#e879f9',
+      alert: '#f43f5e',
+      gold: '#f59e0b',
+      live: '#10b981',
+      text: '#f5f3ff',
+      textMuted: '#c4b5fd',
+    },
+    archHeaderClass: 'bg-gradient-to-r from-[#a855f7] via-[#7e22ce] to-[#3b0764] text-black',
+    elbowClass: 'bg-[#a855f7]',
+    pillboxPrimaryClass: 'bg-[#a855f7] text-black hover:bg-[#e879f9]',
+    pillboxSecondaryClass: 'bg-[#130d24] text-[#e879f9] hover:bg-[#7e22ce] hover:text-white border border-[#3b2064]',
+    glowColor: 'rgba(168, 85, 247, 0.45)',
+    fonts: {
+      display: 'Antonio, sans-serif',
+      mono: 'Courier New, monospace',
+      body: 'Inter, sans-serif',
+    },
+    source: {
+      type: 'sketch',
+      summary: 'Extracted from tactical handheld PADD layout sketch and violet gradient swatches.',
+      timestamp: '2026-09-04',
+    },
+    isCustom: true,
+  },
 };
+
+// Stored custom themes manager
+const STORAGE_KEY = 'mythos_custom_themes';
+
+export function getStoredCustomThemes(): Record<string, ThemeConfig> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Failed to parse custom themes from storage:', e);
+  }
+  return {};
+}
+
+export function registerCustomTheme(theme: ThemeConfig): void {
+  THEMES[theme.id] = { ...theme, isCustom: true };
+  if (typeof window !== 'undefined') {
+    try {
+      const existing = getStoredCustomThemes();
+      existing[theme.id] = { ...theme, isCustom: true };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+      window.dispatchEvent(new CustomEvent('mythos_theme_registered', { detail: theme }));
+    } catch (e) {
+      console.error('Failed to save custom theme:', e);
+    }
+  }
+}
+
+export function deleteCustomTheme(themeId: string): void {
+  delete THEMES[themeId];
+  if (typeof window !== 'undefined') {
+    try {
+      const existing = getStoredCustomThemes();
+      delete existing[themeId];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+      window.dispatchEvent(new CustomEvent('mythos_theme_deleted', { detail: themeId }));
+    } catch (e) {
+      console.error('Failed to delete custom theme:', e);
+    }
+  }
+}
+
+export function getTheme(id: string): ThemeConfig {
+  return THEMES[id] || THEMES['noir-dark'];
+}
+
+// Initialize custom themes into THEMES object on module load
+if (typeof window !== 'undefined') {
+  try {
+    const stored = getStoredCustomThemes();
+    Object.keys(stored).forEach((id) => {
+      THEMES[id] = stored[id];
+    });
+  } catch (e) {
+    console.error('Failed to initialize custom themes:', e);
+  }
+}

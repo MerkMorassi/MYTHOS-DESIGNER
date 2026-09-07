@@ -11,23 +11,29 @@ import {
   Cpu,
   Power,
   Zap,
+  HardDrive,
+  FolderOpen,
+  Network,
+  Play,
 } from 'lucide-react';
 import { ThemeId } from '../../types/msd';
 import { THEMES } from '../../constants/themes';
-import { useLiveVoiceControl } from '../../hooks/useLiveVoiceControl';
+import { LiveVoiceControlHandle } from '../../hooks/useLiveVoiceControl';
 
 interface VoiceControlModuleProps {
   currentTheme: ThemeId;
   onExecuteCommand: (name: string, args: Record<string, unknown>) => void;
   activeMode: string;
   anomalySimulated: boolean;
+  voiceControl: LiveVoiceControlHandle;
 }
 
 export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
   currentTheme,
-  onExecuteCommand,
+  onExecuteCommand: _onExecuteCommand,
   activeMode,
   anomalySimulated,
+  voiceControl,
 }) => {
   const theme = THEMES[currentTheme] || THEMES['noir-dark'];
   const [customPrompt, setCustomPrompt] = useState('');
@@ -47,9 +53,7 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
     disconnect,
     toggleMic,
     sendOrderText,
-  } = useLiveVoiceControl({
-    onExecuteCommand,
-  });
+  } = voiceControl;
 
   const handleSendCustomPrompt = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +65,10 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
   // Quick Tactical Order Presets
   const quickOrders = [
     { label: 'Switch to MSD View', prompt: 'Computer, switch mode to MSD view.' },
+    { label: 'Load Image from Z: Drive', prompt: 'Computer, load image from the Z drive folder Z:/missions/sector4/image.png' },
+    { label: 'Load Host Schematic', prompt: 'Computer, load image from /scans/core_lattice.png' },
+    { label: 'Run Python Telemetry', prompt: 'Computer, execute Python script ingest_telemetry.py' },
+    { label: 'Query Network Daemon', prompt: 'Computer, query network cluster node 127.0.0.1 on port 8000.' },
     { label: 'Switch to AI Diagnostics', prompt: 'Computer, switch mode to AI diagnostics.' },
     { label: 'Switch to UI Builder', prompt: 'Computer, switch mode to UI builder.' },
     { label: 'Theme: Noir Dark', prompt: 'Switch theme to noir-dark.' },
@@ -103,7 +111,10 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-slate-200 tracking-wider">
-                VOICE CONTROL TRANSCEIVER
+                VOXCONPACK TRANSCEIVER
+              </span>
+              <span className="text-xs px-2 py-0.5 rounded bg-cyan-950/40 text-cyan-400 border border-cyan-700/60 font-mono-data font-bold">
+                VOXCONPACK v0.1
               </span>
               <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
                 gemini-3.1-flash-live-preview
@@ -485,6 +496,81 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Host Computer Control & Python Network Matrix */}
+      <div
+        className="p-3.5 rounded-lg border flex flex-col gap-3"
+        style={{
+          backgroundColor: theme.colors.bgSlate,
+          borderColor: theme.colors.border,
+        }}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+          <div className="flex items-center gap-2">
+            <HardDrive className="w-4 h-4 text-cyan-400" />
+            <span className="font-bold text-xs uppercase tracking-wider text-slate-200">
+              VOXCONPACK // Host Computer Control & Python Network Matrix
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] font-mono-data text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              ENDPOINT: /api/host/*
+            </span>
+            <span>|</span>
+            <span className="text-cyan-400">MYTHOS ARCHITECTURE</span>
+          </div>
+        </div>
+
+        <div className="px-2.5 py-1.5 rounded bg-slate-950/70 border border-slate-800 text-[11px] font-mono-data text-slate-300 flex items-center justify-between">
+          <span>PRINCIPLE: <strong className="text-cyan-300">"Voice is an input modality, not authority."</strong></span>
+          <span className="text-[10px] text-amber-400/90 uppercase tracking-wider hidden sm:inline">ALL SIGNAL. NO NOISE.™</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          {/* Drive & Asset Ingestion */}
+          <div className="p-2.5 rounded bg-slate-900/90 border border-slate-800 flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5 text-cyan-400 font-bold">
+              <FolderOpen className="w-3.5 h-3.5" />
+              <span>DRIVE ASSET INGESTION</span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Say: <code className="text-cyan-300">"Computer, load image from Z:/scans/core.png"</code>
+            </p>
+            <div className="text-[10px] font-mono-data text-slate-400">
+              Mounted: <span className="text-slate-300">Z:\, C:\, /mnt, local paths</span> with automated tactical SVG fallback rendering.
+            </div>
+          </div>
+
+          {/* Python Subprocess Bridge */}
+          <div className="p-2.5 rounded bg-slate-900/90 border border-slate-800 flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+              <Play className="w-3.5 h-3.5" />
+              <span>PYTHON RUNTIME BRIDGE</span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Say: <code className="text-amber-300">"Computer, execute Python script analyze.py"</code>
+            </p>
+            <div className="text-[10px] font-mono-data text-slate-400">
+              Daemon target: <span className="text-slate-300">localhost:8000</span> or direct CLI subprocess execution.
+            </div>
+          </div>
+
+          {/* LAN & Cluster Diagnostics */}
+          <div className="p-2.5 rounded bg-slate-900/90 border border-slate-800 flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5 text-blue-400 font-bold">
+              <Network className="w-3.5 h-3.5" />
+              <span>NETWORK CLUSTER CONTROLS</span>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Say: <code className="text-blue-300">"Computer, query network node 127.0.0.1"</code>
+            </p>
+            <div className="text-[10px] font-mono-data text-slate-400">
+              Broadcasts telemetry queries across local Python nodes and socket daemons.
             </div>
           </div>
         </div>

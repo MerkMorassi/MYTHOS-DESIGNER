@@ -30,6 +30,7 @@ interface VisualStudioProps {
   onUpdateManifest: (updated: MSDLayoutManifest) => void;
   currentTheme: ThemeId;
   onThemeChange: (theme: ThemeId) => void;
+  onOpenThemeForge?: () => void;
 }
 
 export const VisualStudio: React.FC<VisualStudioProps> = ({
@@ -37,6 +38,7 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
   onUpdateManifest,
   currentTheme,
   onThemeChange,
+  onOpenThemeForge,
 }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isImporterOpen, setIsImporterOpen] = useState(false);
@@ -164,6 +166,20 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
             <Upload className="w-3.5 h-3.5 inline mr-1" />
             IMPORT JSON
           </button>
+
+          {onOpenThemeForge && (
+            <button
+              type="button"
+              onClick={() => {
+                soundEngine.playChime();
+                onOpenThemeForge();
+              }}
+              className="px-3 py-1 bg-[#152538] border border-cyan-500/70 hover:border-cyan-400 text-cyan-300 hover:text-white text-xs font-antonio font-bold uppercase rounded cursor-pointer transition-colors flex items-center gap-1 shadow"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <span>SKETCH → THEME</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -176,6 +192,23 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
           </div>
 
           <div className="space-y-3 font-mono-data text-xs">
+            <div>
+              <label className="block text-slate-400 mb-1">RUNTIME THEME</label>
+              <select
+                value={currentTheme}
+                onChange={(e) => {
+                  soundEngine.playToggle();
+                  onThemeChange(e.target.value as ThemeId);
+                }}
+                className="w-full p-2 bg-[#050608] border border-[#2f3749] rounded text-cyan-300 focus:outline-none focus:border-cyan-400 cursor-pointer font-bold"
+              >
+                {Object.values(THEMES).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.isCustom ? `★ ${t.name}` : t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-slate-400 mb-1">LAYOUT ID</label>
               <input

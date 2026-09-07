@@ -65,6 +65,15 @@ class LcarSoundEngine {
     if (!this.enabled) return;
     this.playBeep(783.99, 'sine', 0.05, 0.05); // G5
   }
+
+  public isMuted(): boolean {
+    return !this.enabled;
+  }
+
+  public toggleMute(): boolean {
+    this.enabled = !this.enabled;
+    return !this.enabled;
+  }
 }
 
 export const soundEngine = new LcarSoundEngine();

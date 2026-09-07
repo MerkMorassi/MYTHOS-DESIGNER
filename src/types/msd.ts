@@ -3,7 +3,8 @@ export type ThemeId =
   | 'quantum-cyan' 
   | 'aegis-amber' 
   | 'hyperion-blue' 
-  | 'obsidian-void';
+  | 'obsidian-void'
+  | (string & {});
 
 export interface ThemeConfig {
   id: ThemeId;
@@ -27,6 +28,28 @@ export interface ThemeConfig {
   pillboxPrimaryClass: string;
   pillboxSecondaryClass: string;
   glowColor: string;
+  layoutArchetype?: LayoutArchetype;
+  borderRadius?: string;
+  borderStyle?: string;
+  fonts?: {
+    display?: string;
+    mono?: string;
+    body?: string;
+  };
+  source?: {
+    type: 'sketch' | 'css' | 'screenshot' | 'swatch' | 'multi-asset';
+    summary?: string;
+    assetCount?: number;
+    previewThumbnail?: string;
+    timestamp?: string;
+  };
+  extractedPalette?: Array<{
+    hex: string;
+    label: string;
+    role: string;
+  }>;
+  designNotes?: string;
+  isCustom?: boolean;
 }
 
 export type MetricKey = 
@@ -74,6 +97,8 @@ export interface MSDCanvasConfig {
   schematicAsset: string;
   schematicType: SchematicType;
   customSvg?: string;
+  customImage?: string;
+  hostAssetPath?: string;
   nodes: MSDNode[];
   overlayType?: 'none' | 'thermodynamic' | 'coherence' | 'entropy_density' | 'shield_harmonics';
 }
@@ -100,15 +125,47 @@ export interface GeometryParams {
   barGap: number;
 }
 
+export type LayoutArchetype = 
+  | 'lcars-arch' 
+  | 'modern-dashboard' 
+  | 'tactical-hud' 
+  | 'terminal-matrix' 
+  | 'minimalist-grid' 
+  | 'aerospace-telemetry';
+
+export interface ExtrapolatedKpiCard {
+  id: string;
+  label: string;
+  value: string | number;
+  unit?: string;
+  change?: string;
+  isPositive?: boolean;
+  metricKey?: MetricKey;
+  status?: 'nominal' | 'warning' | 'critical';
+}
+
+export interface ExtrapolatedWidget {
+  id: string;
+  title: string;
+  type: 'metric-chart' | 'data-table' | 'status-grid' | 'event-log' | 'gauge-cluster' | 'schematic-embed';
+  colSpan?: 1 | 2 | 3 | 4;
+  description?: string;
+  data?: any;
+}
+
 export interface MSDLayoutManifest {
   $schema: string;
   layoutId: string;
   name?: string;
   theme: ThemeId;
+  layoutArchetype?: LayoutArchetype;
   header: MSDHeader;
   navigation: MSDNavigationItem[];
   msdCanvas: MSDCanvasConfig;
   geometryParams?: GeometryParams;
+  kpiCards?: ExtrapolatedKpiCard[];
+  widgets?: ExtrapolatedWidget[];
+  designRationale?: string;
 }
 
 export type AppMode = 'msd-view' | 'ui-builder' | 'token-inspector' | 'ai-diagnostics' | 'voice-control';

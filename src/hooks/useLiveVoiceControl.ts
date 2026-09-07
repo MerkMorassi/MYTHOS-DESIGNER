@@ -301,3 +301,5 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
     sendOrderText,
   };
 }
+
+export type LiveVoiceControlHandle = ReturnType<typeof useLiveVoiceControl>;

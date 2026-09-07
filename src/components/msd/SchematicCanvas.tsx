@@ -15,6 +15,7 @@ interface SchematicCanvasProps {
   onSelectNode: (node: MSDNode) => void;
   anomalySimulated: boolean;
   isBuilderMode?: boolean;
+  onClearCustomImage?: () => void;
 }
 
 export const SchematicCanvas: React.FC<SchematicCanvasProps> = ({
@@ -25,6 +26,7 @@ export const SchematicCanvas: React.FC<SchematicCanvasProps> = ({
   onSelectNode,
   anomalySimulated,
   isBuilderMode = false,
+  onClearCustomImage,
 }) => {
   const theme = THEMES[currentTheme];
 
@@ -38,11 +40,21 @@ export const SchematicCanvas: React.FC<SchematicCanvasProps> = ({
         <div className="flex items-center gap-2">
           <Eye className={`w-4 h-4 ${currentTheme === 'noir-dark' ? 'text-slate-200' : 'text-black'}`} />
           <span>
-            MSD CANVAS // SCHEMATIC: {canvasConfig.schematicType.replace('_', ' ')}
+            MSD CANVAS // {canvasConfig.customImage ? `HOST ASSET: ${canvasConfig.hostAssetPath || 'CUSTOM'}` : `SCHEMATIC: ${canvasConfig.schematicType.replace('_', ' ')}`}
           </span>
         </div>
 
         <div className={`flex items-center gap-3 font-mono-data text-[10px] ${currentTheme === 'noir-dark' ? 'text-slate-300' : 'text-black'}`}>
+          {canvasConfig.customImage && onClearCustomImage && (
+            <button
+              type="button"
+              onClick={onClearCustomImage}
+              className="px-2 py-0.5 rounded bg-black/30 hover:bg-black/50 text-white font-bold tracking-wider uppercase border border-black/40 cursor-pointer transition-colors"
+              title="Return to standard vector schematic"
+            >
+              Reset Vector
+            </button>
+          )}
           <span>OVERLAY: {canvasConfig.overlayType || 'THERMODYNAMIC'}</span>
           <span>|</span>
           <span>NODES: {canvasConfig.nodes.length}</span>
@@ -59,13 +71,28 @@ export const SchematicCanvas: React.FC<SchematicCanvasProps> = ({
           <DataCascade columns={2} rows={10} speedMs={200} />
         </div>
 
-        {/* Vector Schematic SVG Backdrop */}
+        {/* Vector Schematic SVG Backdrop or Ingested Host Image */}
         <div className="relative w-full max-w-[850px] aspect-[16/10] flex items-center justify-center">
-          <VectorSchematics
-            type={canvasConfig.schematicType}
-            currentTheme={currentTheme}
-            anomalySimulated={anomalySimulated}
-          />
+          {canvasConfig.customImage ? (
+            <div className="relative w-full h-full flex flex-col items-center justify-center p-2 rounded border border-cyan-500/40 bg-black/80 overflow-hidden shadow-2xl">
+              <img
+                src={canvasConfig.customImage}
+                alt="Ingested Host Asset"
+                className="max-w-full max-h-[380px] object-contain rounded border border-slate-800"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute bottom-2 left-2 flex items-center gap-2 px-2.5 py-1 rounded bg-[#091522]/90 border border-cyan-500/60 text-[10px] font-mono-data text-cyan-300">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <span>PATH: {canvasConfig.hostAssetPath || 'LOCAL DRIVE ASSET'}</span>
+              </div>
+            </div>
+          ) : (
+            <VectorSchematics
+              type={canvasConfig.schematicType}
+              currentTheme={currentTheme}
+              anomalySimulated={anomalySimulated}
+            />
+          )}
 
           {/* Dynamic Thermodynamic Spectrum Heatmap Overlay */}
           <ThermodynamicOverlay

@@ -7,26 +7,76 @@ import {
   SystemMetric,
   ThemeId,
 } from './types/msd';
-import { DEFAULT_LAYOUT_MANIFEST } from './constants/templates';
+import { DEFAULT_LAYOUT_MANIFEST, TEMPLATE_PRESETS } from './constants/templates';
 import { THEMES } from './constants/themes';
 import { ArchHeader } from './components/common/ArchHeader';
 import { LeftPillarElbow } from './components/common/LeftPillarElbow';
 import { BottomRunner } from './components/common/BottomRunner';
+import { ModernAppHeader } from './components/layout/ModernAppHeader';
+import { ModernAppSidebar } from './components/layout/ModernAppSidebar';
+import { ModernDashboardView } from './components/layout/ModernDashboardView';
+import { ModernBottomBar } from './components/layout/ModernBottomBar';
 import { SchematicCanvas } from './components/msd/SchematicCanvas';
 import { TelemetryPanel } from './components/msd/TelemetryPanel';
 import { VisualStudio } from './components/builder/VisualStudio';
 import { TokenInspector } from './components/tokens/TokenInspector';
 import { MythOSDiagnosticConsole } from './components/ai/MythOSDiagnosticConsole';
 import { VoiceControlModule } from './components/voice/VoiceControlModule';
+import { ThemeForgeModal } from './components/theme/ThemeForgeModal';
 import { soundEngine } from './utils/audio';
+import { useLiveVoiceControl } from './hooks/useLiveVoiceControl';
+import { Mic, MicOff } from 'lucide-react';
 
 export default function App() {
-  const [manifest, setManifest] = useState<MSDLayoutManifest>(DEFAULT_LAYOUT_MANIFEST);
-  const [currentTheme, setCurrentTheme] = useState<ThemeId>(DEFAULT_LAYOUT_MANIFEST.theme);
+  const [manifest, setManifest] = useState<MSDLayoutManifest>(
+    TEMPLATE_PRESETS.modernCloudDashboard || DEFAULT_LAYOUT_MANIFEST
+  );
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>(
+    (TEMPLATE_PRESETS.modernCloudDashboard?.theme as ThemeId) || DEFAULT_LAYOUT_MANIFEST.theme
+  );
   const [appMode, setAppMode] = useState<AppMode>('msd-view');
   const [selectedNode, setSelectedNode] = useState<MSDNode | null>(null);
   const [anomalySimulated, setAnomalySimulated] = useState<boolean>(false);
+  const [isThemeForgeOpen, setIsThemeForgeOpen] = useState<boolean>(false);
   const theme = THEMES[currentTheme] || THEMES['noir-dark'];
+
+  const isModernArchetype = Boolean(
+    manifest.layoutArchetype && manifest.layoutArchetype !== 'lcars-classic'
+  );
+
+  const handleSelectTemplate = (templateKey: string) => {
+    // Handle custom themes if prefixed with custom-
+    if (templateKey.startsWith('custom-')) {
+      const themeId = templateKey.replace('custom-', '') as ThemeId;
+      if (THEMES[themeId]) {
+        soundEngine.playChime();
+        setCurrentTheme(themeId);
+        setManifest((prev) => ({
+          ...prev,
+          theme: themeId,
+          name: `${THEMES[themeId].name} Synthesized Template`,
+        }));
+      }
+      return;
+    }
+
+    // Direct key match in TEMPLATE_PRESETS
+    let preset = TEMPLATE_PRESETS[templateKey];
+    if (!preset) {
+      // Lookup by layoutId or name match
+      preset = Object.values(TEMPLATE_PRESETS).find(
+        (p) => p.layoutId === templateKey || p.name.toLowerCase() === templateKey.toLowerCase()
+      );
+    }
+
+    if (preset) {
+      soundEngine.playChime();
+      setManifest(preset);
+      if (preset.theme && THEMES[preset.theme as ThemeId]) {
+        setCurrentTheme(preset.theme as ThemeId);
+      }
+    }
+  };
 
   // Live System Metrics state with real-time drift
   const [metrics, setMetrics] = useState<Record<MetricKey, SystemMetric>>({
@@ -210,7 +260,7 @@ export default function App() {
   };
 
   // Tactical Voice Order Execution Dispatcher
-  const handleExecuteVoiceCommand = (name: string, args: Record<string, unknown>) => {
+  const handleExecuteVoiceCommand = async (name: string, args: Record<string, unknown>) => {
     console.log('[App] Tactical Voice Order Received:', name, args);
     soundEngine.playChime();
 
@@ -281,10 +331,75 @@ export default function App() {
         plasmaFlowRate: { ...prev.plasmaFlowRate, value: 85.0, status: 'nominal' },
         coreTemperature: { ...prev.coreTemperature, value: 3400, status: 'nominal' },
       }));
+    } else if (name === 'loadHostAsset') {
+      const rawPath = String(args.filePath || '');
+      if (rawPath) {
+        try {
+          const res = await fetch(`/api/host/asset?path=${encodeURIComponent(rawPath)}`);
+          const data = await res.json();
+          if (data.dataUrl) {
+            setManifest((prev) => ({
+              ...prev,
+              msdCanvas: {
+                ...prev.msdCanvas,
+                customImage: data.dataUrl,
+                hostAssetPath: rawPath,
+              },
+            }));
+            soundEngine.playToggle();
+            setAppMode('msd-view');
+          }
+        } catch (err) {
+          console.error('[App] Failed to load host asset:', err);
+        }
+      }
+    } else if (name === 'executePythonScript') {
+      const scriptName = String(args.scriptName || '');
+      const scriptArgs = String(args.arguments || '');
+      try {
+        const res = await fetch('/api/host/execute-python', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ script: scriptName, args: scriptArgs }),
+        });
+        const data = await res.json();
+        soundEngine.playBeep(920, 'sine', 0.08, 0.08);
+        console.log('[Host Execute Python Output]', data);
+      } catch (err) {
+        console.error('[App] Failed to execute Python script:', err);
+      }
+    } else if (name === 'queryNetworkNode') {
+      const node = String(args.nodeAddress || '');
+      const port = Number(args.port || 8000);
+      try {
+        const res = await fetch('/api/host/status');
+        const data = await res.json();
+        soundEngine.playToggle();
+        console.log('[Host Query Network Node Status]', { node, port, data });
+      } catch (err) {
+        console.error('[App] Failed to query network node:', err);
+      }
     }
   };
 
+  const handleClearCustomImage = () => {
+    soundEngine.playToggle();
+    setManifest((prev) => ({
+      ...prev,
+      msdCanvas: {
+        ...prev.msdCanvas,
+        customImage: undefined,
+        hostAssetPath: undefined,
+      },
+    }));
+  };
+
   const activeNavId = manifest.navigation.find((n) => n.active)?.id || manifest.navigation[0]?.id;
+
+  // Persistent Live Voice Control Hook: maintains active connection and mic stream across all tabs
+  const voiceControl = useLiveVoiceControl({
+    onExecuteCommand: handleExecuteVoiceCommand,
+  });
 
   const handleSelectNav = (id: string) => {
     setManifest((prev) => ({
@@ -301,49 +416,86 @@ export default function App() {
       className="min-h-screen text-slate-100 flex flex-col p-2 sm:p-4 gap-3 max-w-[1600px] mx-auto overflow-x-hidden font-sans transition-colors duration-300"
       style={{ backgroundColor: theme.colors.bgObsidian }}
     >
-      {/* Top Arch Header */}
-      <ArchHeader
+      {/* Top Header - Persists across all themes with live voice control synchronization */}
+      <ModernAppHeader
         headerData={manifest.header}
         currentTheme={currentTheme}
-        onThemeChange={setCurrentTheme}
+        onThemeChange={(t) => {
+          setCurrentTheme(t);
+          setManifest((prev) => ({ ...prev, theme: t }));
+        }}
         appMode={appMode}
         onAppModeChange={setAppMode}
+        onOpenThemeForge={() => setIsThemeForgeOpen(true)}
+        onSelectTemplate={handleSelectTemplate}
+        currentTemplateId={manifest.layoutId}
+        voiceActive={voiceControl.isConnected}
+        voiceMicActive={voiceControl.isMicActive}
+        voiceSpeaking={voiceControl.isSpeaking}
+        onToggleVoiceMic={voiceControl.toggleMic}
+        onDisconnectVoice={voiceControl.disconnect}
       />
 
       {/* Main Grid Content Workspace */}
       <div className="flex-grow flex flex-col md:flex-row gap-3 items-stretch w-full">
-        {/* Left Pillar Frame */}
-        <LeftPillarElbow
-          navigationItems={manifest.navigation}
-          activeNavId={activeNavId}
-          onSelectNav={handleSelectNav}
-          currentTheme={currentTheme}
-          geometryParams={manifest.geometryParams}
-          anomalySimulated={anomalySimulated}
-          onToggleAnomaly={handleToggleAnomaly}
-        />
+        {/* Left Sidebar Frame */}
+        {isModernArchetype ? (
+          <ModernAppSidebar
+            navigationItems={manifest.navigation}
+            activeNavId={activeNavId}
+            onSelectNav={handleSelectNav}
+            currentTheme={currentTheme}
+            anomalySimulated={anomalySimulated}
+            onToggleAnomaly={handleToggleAnomaly}
+            metrics={metrics}
+          />
+        ) : (
+          <LeftPillarElbow
+            navigationItems={manifest.navigation}
+            activeNavId={activeNavId}
+            onSelectNav={handleSelectNav}
+            currentTheme={currentTheme}
+            geometryParams={manifest.geometryParams}
+            anomalySimulated={anomalySimulated}
+            onToggleAnomaly={handleToggleAnomaly}
+          />
+        )}
 
         {/* Center / Right Content Workspace */}
         <main className="flex-grow flex flex-col gap-3 min-w-0">
           {appMode === 'msd-view' && (
-            <div className="flex flex-col lg:flex-row gap-3 w-full">
-              <SchematicCanvas
-                canvasConfig={manifest.msdCanvas}
+            isModernArchetype ? (
+              <ModernDashboardView
+                manifest={manifest}
                 metrics={metrics}
                 currentTheme={currentTheme}
                 selectedNode={selectedNode}
                 onSelectNode={setSelectedNode}
                 anomalySimulated={anomalySimulated}
-              />
-              <TelemetryPanel
-                metrics={metrics}
-                selectedNode={selectedNode}
-                onCloseSelectedNode={() => setSelectedNode(null)}
                 onUpdateMetric={handleUpdateMetric}
-                currentTheme={currentTheme}
-                anomalySimulated={anomalySimulated}
+                onClearCustomImage={handleClearCustomImage}
               />
-            </div>
+            ) : (
+              <div className="flex flex-col lg:flex-row gap-3 w-full">
+                <SchematicCanvas
+                  canvasConfig={manifest.msdCanvas}
+                  metrics={metrics}
+                  currentTheme={currentTheme}
+                  selectedNode={selectedNode}
+                  onSelectNode={setSelectedNode}
+                  anomalySimulated={anomalySimulated}
+                  onClearCustomImage={handleClearCustomImage}
+                />
+                <TelemetryPanel
+                  metrics={metrics}
+                  selectedNode={selectedNode}
+                  onCloseSelectedNode={() => setSelectedNode(null)}
+                  onUpdateMetric={handleUpdateMetric}
+                  currentTheme={currentTheme}
+                  anomalySimulated={anomalySimulated}
+                />
+              </div>
+            )
           )}
 
           {appMode === 'ui-builder' && (
@@ -351,12 +503,23 @@ export default function App() {
               manifest={manifest}
               onUpdateManifest={setManifest}
               currentTheme={currentTheme}
-              onThemeChange={setCurrentTheme}
+              onThemeChange={(t) => {
+                setCurrentTheme(t);
+                setManifest((prev) => ({ ...prev, theme: t }));
+              }}
+              onOpenThemeForge={() => setIsThemeForgeOpen(true)}
             />
           )}
 
           {appMode === 'token-inspector' && (
-            <TokenInspector currentTheme={currentTheme} />
+            <TokenInspector
+              currentTheme={currentTheme}
+              onThemeChange={(t) => {
+                setCurrentTheme(t);
+                setManifest((prev) => ({ ...prev, theme: t }));
+              }}
+              onOpenThemeForge={() => setIsThemeForgeOpen(true)}
+            />
           )}
 
           {appMode === 'ai-diagnostics' && (
@@ -374,19 +537,94 @@ export default function App() {
               onExecuteCommand={handleExecuteVoiceCommand}
               activeMode={appMode}
               anomalySimulated={anomalySimulated}
+              voiceControl={voiceControl}
             />
           )}
         </main>
       </div>
 
+      {/* Ambient Voice HUD: persists across other tabs when voice uplink is active */}
+      {voiceControl.isConnected && appMode !== 'voice-control' && (
+        <aside
+          aria-label="Ambient Voice Control HUD"
+          className="fixed bottom-12 right-4 z-40 flex items-center gap-2.5 p-2 px-3.5 rounded-lg bg-[#07131b]/95 border border-emerald-500/50 shadow-2xl backdrop-blur-md font-mono-data text-xs text-slate-200 animate-fade-in"
+        >
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span className="text-emerald-400 font-bold tracking-wider">VOICE LIVE</span>
+          {voiceControl.isSpeaking ? (
+            <span className="text-cyan-300 font-semibold animate-pulse">Responding...</span>
+          ) : voiceControl.isMicActive ? (
+            <span className="text-slate-300">Listening...</span>
+          ) : (
+            <span className="text-amber-400">Mic Muted</span>
+          )}
+          <div className="h-3 w-[1px] bg-slate-700 mx-0.5" />
+          <button
+            type="button"
+            onClick={voiceControl.toggleMic}
+            className={`p-1 rounded cursor-pointer transition-colors ${
+              voiceControl.isMicActive
+                ? 'text-emerald-400 hover:text-emerald-200 bg-emerald-950/60 border border-emerald-700/60'
+                : 'text-amber-400 hover:text-amber-200 bg-amber-950/60 border border-amber-700/60'
+            }`}
+            title={voiceControl.isMicActive ? 'Mute Microphone' : 'Unmute Microphone'}
+          >
+            {voiceControl.isMicActive ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playToggle();
+              setAppMode('voice-control');
+            }}
+            className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[10px] uppercase font-bold border border-emerald-500/40 cursor-pointer transition-all"
+            title="Switch to Full Voice Control Console"
+          >
+            Console
+          </button>
+        </aside>
+      )}
+
       {/* Base Framing Bottom Runner */}
-      <BottomRunner
-        currentTheme={currentTheme}
-        stardate={manifest.header.stardate}
-        onRefreshData={() => {
-          setSelectedNode(null);
-          setAnomalySimulated(false);
+      {isModernArchetype ? (
+        <ModernBottomBar
+          currentTheme={currentTheme}
+          stardate={manifest.header.stardate}
+          archetype={manifest.layoutArchetype}
+          onRefreshData={() => {
+            setSelectedNode(null);
+            setAnomalySimulated(false);
+          }}
+        />
+      ) : (
+        <BottomRunner
+          currentTheme={currentTheme}
+          stardate={manifest.header.stardate}
+          onRefreshData={() => {
+            setSelectedNode(null);
+            setAnomalySimulated(false);
+          }}
+        />
+      )}
+
+      {/* Multimodal Sketch & Asset-to-Theme Transformation Modal */}
+      <ThemeForgeModal
+        isOpen={isThemeForgeOpen}
+        onClose={() => setIsThemeForgeOpen(false)}
+        onThemeActivated={(newThemeId) => {
+          setCurrentTheme(newThemeId);
+          setManifest((prev) => ({ ...prev, theme: newThemeId }));
         }}
+        onTemplateActivated={(newTemplate) => {
+          setManifest(newTemplate);
+          if (newTemplate.theme && THEMES[newTemplate.theme as ThemeId]) {
+            setCurrentTheme(newTemplate.theme as ThemeId);
+          }
+        }}
+        currentThemeId={currentTheme}
       />
     </div>
   );
