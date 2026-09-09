@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { LiveAudioPlayer, floatTo16BitPCM, arrayBufferToBase64 } from '../utils/liveAudioEngine';
+import { soundEngine } from '../utils/audio';
+import { windowsVoiceEngine } from '../utils/windowsVoiceEngine';
 
 export interface LiveTranscriptItem {
   id: string;
@@ -30,6 +32,10 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
   const [transcripts, setTranscripts] = useState<LiveTranscriptItem[]>([]);
   const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isTtsFallbackActive, setIsTtsFallbackActive] = useState<boolean>(false);
+  const [fallbackVoiceName, setFallbackVoiceName] = useState<string>(() => {
+    return windowsVoiceEngine.getBestWindowsVoice().name;
+  });
   const [selectedVoice, setSelectedVoice] = useState<string>(() => {
     return localStorage.getItem('mythos_voice') || 'Charon';
   });
@@ -40,10 +46,25 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const onExecuteCommandRef = useRef(onExecuteCommand);
+  const hasPlayedAudioRef = useRef<boolean>(false);
+  const greetingFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transcriptTtsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     onExecuteCommandRef.current = onExecuteCommand;
   }, [onExecuteCommand]);
+
+  // Keep fallback voice name aligned with selected persona and OS voice changes
+  useEffect(() => {
+    const updateVoiceName = () => {
+      const match = windowsVoiceEngine.getBestWindowsVoice(selectedVoice);
+      setFallbackVoiceName(match.name);
+    };
+    updateVoiceName();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = updateVoiceName;
+    }
+  }, [selectedVoice]);
 
   const addTranscript = useCallback((role: 'user' | 'model' | 'system', text: string, isCommand = false) => {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -58,6 +79,21 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
       },
     ]);
   }, []);
+
+  const speakFallback = useCallback(
+    (text: string, personaHint?: string) => {
+      setIsTtsFallbackActive(true);
+      const match = windowsVoiceEngine.getBestWindowsVoice(personaHint || selectedVoice);
+      setFallbackVoiceName(match.name);
+      windowsVoiceEngine.speak(text, {
+        personaHint: personaHint || selectedVoice,
+        onStart: () => setIsSpeaking(true),
+        onEnd: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      });
+    },
+    [selectedVoice]
+  );
 
   const cleanupMic = useCallback(() => {
     if (processorRef.current) {
@@ -77,6 +113,16 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
   }, []);
 
   const disconnect = useCallback(() => {
+    if (greetingFallbackTimerRef.current) {
+      clearTimeout(greetingFallbackTimerRef.current);
+      greetingFallbackTimerRef.current = null;
+    }
+    if (transcriptTtsTimerRef.current) {
+      clearTimeout(transcriptTtsTimerRef.current);
+      transcriptTtsTimerRef.current = null;
+    }
+    windowsVoiceEngine.cancel();
+    hasPlayedAudioRef.current = false;
     cleanupMic();
     if (playerRef.current) {
       playerRef.current.close();
@@ -162,7 +208,24 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
       console.log(`[LiveVoice] WebSocket opened with voice: ${voiceToUse}`);
       setIsConnected(true);
       setIsConnecting(false);
+      soundEngine.playChime();
       addTranscript('system', `Voice Control Uplink Established. Persona: ${voiceToUse} (gemini-3.1-flash-live-preview).`);
+      addTranscript('model', 'VOXCON Active. Standing by.');
+
+      // Arm tactical voice synthesis fallback if model live audio is delayed (timed after chime)
+      hasPlayedAudioRef.current = false;
+      if (greetingFallbackTimerRef.current) {
+        clearTimeout(greetingFallbackTimerRef.current);
+      }
+      greetingFallbackTimerRef.current = setTimeout(() => {
+        if (!hasPlayedAudioRef.current) {
+          const match = windowsVoiceEngine.getBestWindowsVoice(voiceToUse);
+          console.warn('[LiveVoice] Gemini Live audio delayed/unavailable. Reverting to default Windows Read Aloud voice:', match.name);
+          addTranscript('system', `TTS Fallback Active: Reverted to default Windows Read Aloud voice (${match.name}).`);
+          speakFallback('VOXCON Active. Standing by.', voiceToUse);
+        }
+      }, 1400);
+
       // Auto-start mic after user clicked connect
       startMic(ws);
     };
@@ -171,7 +234,7 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
       try {
         const msg = JSON.parse(event.data);
 
-        if (msg.type === 'connected') {
+        if (msg.type === 'connected' || (msg.type === 'status' && msg.status === 'connected')) {
           setIsConnected(true);
         }
 
@@ -193,22 +256,76 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
         }
 
         if (msg.type === 'audio' && msg.audio) {
+          hasPlayedAudioRef.current = true;
+          setIsTtsFallbackActive(false);
+          if (greetingFallbackTimerRef.current) {
+            clearTimeout(greetingFallbackTimerRef.current);
+            greetingFallbackTimerRef.current = null;
+          }
+          if (transcriptTtsTimerRef.current) {
+            clearTimeout(transcriptTtsTimerRef.current);
+            transcriptTtsTimerRef.current = null;
+          }
+          windowsVoiceEngine.cancel();
           setIsSpeaking(true);
           playerRef.current?.playChunk(msg.audio);
         }
 
-        if (msg.type === 'transcript') {
-          addTranscript(msg.role || 'model', msg.text);
+        if (msg.type === 'transcript' && msg.text) {
+          const textToSpeak = msg.text;
+          setTranscripts((prev) => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === 'model' && last.text.includes('VOXCON Active') && textToSpeak.includes('VOXCON Active')) {
+              return prev;
+            }
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            return [
+              ...prev.slice(-49),
+              {
+                id: `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                role: msg.role || 'model',
+                text: textToSpeak,
+                timestamp: time,
+              },
+            ];
+          });
+
+          // Check if Gemini audio follows. If no audio chunk arrives within 900ms, revert to Windows Read Aloud
+          if (transcriptTtsTimerRef.current) {
+            clearTimeout(transcriptTtsTimerRef.current);
+          }
+          transcriptTtsTimerRef.current = setTimeout(() => {
+            if (!hasPlayedAudioRef.current) {
+              const match = windowsVoiceEngine.getBestWindowsVoice(selectedVoice);
+              console.warn('[LiveVoice] Gemini audio missing for response. Reverting to Windows Read Aloud:', match.name);
+              addTranscript('system', `TTS Fallback: Gemini audio unavailable. Vocalizing via Windows Read Aloud (${match.name}).`);
+              speakFallback(textToSpeak, selectedVoice);
+            }
+          }, 900);
         }
 
         if (msg.type === 'interrupted') {
           playerRef.current?.interrupt();
+          windowsVoiceEngine.cancel();
           setIsSpeaking(false);
         }
 
         if (msg.type === 'error') {
-          setErrorMessage(msg.error);
-          addTranscript('system', `Live API Error: ${msg.error}`);
+          let readableError = typeof msg.error === 'string' ? msg.error : 'Live API connection error.';
+          try {
+            if (typeof msg.error === 'string' && msg.error.includes('{')) {
+              const cleaned = msg.error.replace(/^ApiError:\s*/, '');
+              const parsed = JSON.parse(cleaned);
+              if (parsed?.error?.message) {
+                readableError = parsed.error.message;
+              }
+            }
+          } catch {}
+          setErrorMessage(readableError);
+          setIsTtsFallbackActive(true);
+          const match = windowsVoiceEngine.getBestWindowsVoice(selectedVoice);
+          addTranscript('system', `TTS Fallback: Gemini service alert (${readableError}). Reverted to Windows Read Aloud (${match.name}).`);
+          speakFallback(`VOXCON alert: Gemini TTS service unavailable. Reverted to Windows Read Aloud default voice.`, selectedVoice);
         }
       } catch (err) {
         console.error('[LiveVoice] Message parse error:', err);
@@ -219,6 +336,9 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
       console.error('[LiveVoice] WebSocket error:', err);
       setErrorMessage('Uplink connection error.');
       setIsConnecting(false);
+      setIsTtsFallbackActive(true);
+      const match = windowsVoiceEngine.getBestWindowsVoice(selectedVoice);
+      addTranscript('system', `TTS Fallback: Uplink connection error. Reverted to Windows Read Aloud (${match.name}).`);
     };
 
     ws.onclose = () => {
@@ -229,7 +349,7 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
       cleanupMic();
       addTranscript('system', 'Voice Control Uplink Offline.');
     };
-  }, [addTranscript, cleanupMic, startMic]);
+  }, [addTranscript, cleanupMic, startMic, selectedVoice, speakFallback]);
 
   const toggleMic = useCallback(async () => {
     if (isMicActive) {
@@ -246,10 +366,15 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
   const sendOrderText = useCallback(
     (text: string) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        setErrorMessage('Voice control uplink is not connected. Connect first.');
+        setErrorMessage('Voice control uplink is not connected. Acknowledged locally via Windows Read Aloud.');
+        addTranscript('user', text);
+        const match = windowsVoiceEngine.getBestWindowsVoice(selectedVoice);
+        addTranscript('system', `Order acknowledged locally via Windows Read Aloud (${match.name}).`);
+        speakFallback(`Order received: ${text}. Uplink currently offline.`, selectedVoice);
         return;
       }
       addTranscript('user', text);
+      hasPlayedAudioRef.current = false;
       wsRef.current.send(
         JSON.stringify({
           type: 'text',
@@ -257,12 +382,14 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
         })
       );
     },
-    [addTranscript]
+    [addTranscript, selectedVoice, speakFallback]
   );
 
   const changeVoice = useCallback(
     (voice: string) => {
       setSelectedVoice(voice);
+      const match = windowsVoiceEngine.getBestWindowsVoice(voice);
+      setFallbackVoiceName(match.name);
       try {
         localStorage.setItem('mythos_voice', voice);
       } catch (err) {
@@ -277,6 +404,12 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
     },
     [disconnect, connect]
   );
+
+  const testWindowsVoice = useCallback(() => {
+    const match = windowsVoiceEngine.getBestWindowsVoice(selectedVoice);
+    addTranscript('system', `Testing default Windows Read Aloud voice: ${match.name}`);
+    speakFallback('VOXCON Active. Default Windows Read Aloud engine verified and standing by.', selectedVoice);
+  }, [selectedVoice, addTranscript, speakFallback]);
 
   useEffect(() => {
     return () => {
@@ -294,11 +427,14 @@ export function useLiveVoiceControl({ onExecuteCommand }: UseLiveVoiceControlOpt
     executedOrders,
     errorMessage,
     selectedVoice,
+    isTtsFallbackActive,
+    fallbackVoiceName,
     changeVoice,
     connect,
     disconnect,
     toggleMic,
     sendOrderText,
+    testWindowsVoice,
   };
 }
 

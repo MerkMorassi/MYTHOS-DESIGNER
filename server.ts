@@ -243,6 +243,85 @@ async function startServer() {
     return { theme, template };
   }
 
+  // Multi-tier model fallback for Gemini API calls to mitigate 503 high demand spikes and rate limits
+  interface GeminiGenerateOptions {
+    primaryModel?: string;
+    fallbackModels?: string[];
+    contents: any;
+    config?: any;
+  }
+
+  async function callGeminiGenerateContentWithFallback(
+    ai: GoogleGenAI,
+    options: GeminiGenerateOptions
+  ): Promise<{ response: any; modelUsed: string }> {
+    const candidateModels = [
+      options.primaryModel || "gemini-3.8-flash",
+      ...(options.fallbackModels || ["gemini-flash-latest", "gemini-3.1-flash-lite"]),
+    ];
+    const uniqueModels = Array.from(new Set(candidateModels));
+
+    let lastError: unknown = null;
+
+    for (const model of uniqueModels) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: options.contents,
+            config: options.config,
+          });
+          return { response, modelUsed: model };
+        } catch (err: unknown) {
+          lastError = err;
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const isTemporary =
+            errMsg.includes("503") ||
+            errMsg.includes("UNAVAILABLE") ||
+            errMsg.includes("high demand") ||
+            errMsg.includes("429") ||
+            errMsg.includes("RESOURCE_EXHAUSTED");
+
+          if (isTemporary && attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            continue;
+          }
+          console.warn(`[Gemini Fallback] Model '${model}' unavailable (${errMsg.slice(0, 100)}...). Trying next candidate model.`);
+          break;
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
+  // Synthesizes a Department of Defense & U.S. Navy COMMPACK-MIL compliant telemetry diagnostic
+  // when the remote Gemini API experiences temporary 503 high demand or network unavailability.
+  function synthesizeLocalTelemetryDiagnostic(metrics: any, manifest: any, prompt?: string): string {
+    const coherence = typeof metrics?.warpFieldCoherence === "number" ? metrics.warpFieldCoherence : 0.998;
+    const plasma = typeof metrics?.plasmaFlowRate === "number" ? metrics.plasmaFlowRate : 85.0;
+    const temp = typeof metrics?.coreTemperature === "number" ? metrics.coreTemperature : 3400;
+    const entropy = typeof metrics?.subspaceEntropy === "number" ? metrics.subspaceEntropy : 0.042;
+    const isSurge = coherence < 0.95 || temp > 4000 || entropy > 0.15;
+    const schematic = (manifest?.msdCanvas?.schematicType || "quantum_core").toString().replace(/_/g, " ").toUpperCase();
+    const nodeCount = manifest?.msdCanvas?.nodes?.length || 0;
+
+    return `### BLUF (Bottom Line Up Front)
+The quantum containment lattice and thermodynamic distribution grid operate ${isSurge ? "under an active anomaly surge requiring tactical stabilization" : "within standard operational limits at nominal coherence"}.
+
+### Operational Telemetry Assessment
+- **Warp Field Coherence**: ${(coherence * 100).toFixed(2)}% (tactical threshold: >= 98.00%).
+- **Plasma Conduit Flow**: ${plasma.toFixed(1)}% through primary distribution arrays.
+- **Thermal Core Temperature**: ${temp} K (thermal margin: ${Math.max(0, 5000 - temp)} K before interlock limit).
+- **Subspace Entropy Density**: ${entropy.toFixed(4)} (coherence delta: stable).
+- **Active Schematic Subsystem**: ${schematic} with ${nodeCount} telemetry sensors registered.
+
+### Tactical Action Directives
+1. The containment field generator must maintain magnetic plasma balance.
+2. The cooling manifold will purge excess thermal buildup if core temperature exceeds 4,200 K.
+3. System operators may recalibrate subspace harmonic sensors via the Master Systems Display.`;
+  }
+
   // API endpoint for Multimodal Sketch & Asset-to-Theme/Template Transformation
   app.post("/api/theme/transform", async (req, res) => {
     try {
@@ -384,8 +463,8 @@ Return ONLY the valid JSON with keys { "theme": ..., "template": ... }. Do not e
 
       contents.push(textPrompt);
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
+      const { response, modelUsed } = await callGeminiGenerateContentWithFallback(ai, {
+        primaryModel: "gemini-3.8-flash",
         contents,
         config: {
           systemInstruction,
@@ -413,7 +492,7 @@ Return ONLY the valid JSON with keys { "theme": ..., "template": ... }. Do not e
             targetName
           );
 
-      return res.json({ theme: finalTheme, template: finalTemplate, source: "gemini_multimodal" });
+      return res.json({ theme: finalTheme, template: finalTemplate, source: `gemini_${modelUsed}` });
     } catch (error: unknown) {
       console.error("Theme & template transformation error:", error);
       const fallback = synthesizeFallbackTemplateAndTheme({
@@ -432,21 +511,26 @@ Return ONLY the valid JSON with keys { "theme": ..., "template": ... }. Do not e
 
   // API endpoint for Gemini Telemetry Diagnostics
   app.post("/api/gemini/analyze", async (req, res) => {
+    const { prompt, metrics, manifest } = req.body || {};
     try {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        return res.status(500).json({ error: "GEMINI_API_KEY environment variable is not configured." });
+        const localDiagnostic = synthesizeLocalTelemetryDiagnostic(metrics, manifest, prompt);
+        return res.json({
+          analysis: localDiagnostic,
+          source: "local_diagnostic_matrix",
+          notice: "Local telemetry diagnostic synthesized (GEMINI_API_KEY unconfigured).",
+        });
       }
 
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
+            "User-Agent": "aistudio-build",
           },
         },
       });
-      const { prompt, metrics, manifest } = req.body;
 
       const systemInstruction = `You are the MythOS Tactical AI Engine for Advanced Aerospace & Quantum Operations.
 You analyze Master Systems Display (MSD) telemetry metrics, thermodynamic entropy density, and layout schemas.
@@ -469,26 +553,40 @@ Format your diagnostic report with bold section headers and parallel bullet poin
       const userContent = `OPERATOR QUERY: ${prompt || "Perform full system telemetry diagnostic."}
 
 CURRENT METRICS:
-${JSON.stringify(metrics, null, 2)}
+${JSON.stringify(metrics || {}, null, 2)}
 
 CURRENT LAYOUT SCHEMATIC:
 ${JSON.stringify(manifest?.msdCanvas?.schematicType || "quantum_core")}
 NODES BOUND: ${manifest?.msdCanvas?.nodes?.length || 0}`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: userContent,
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        },
-      });
+      try {
+        const { response, modelUsed } = await callGeminiGenerateContentWithFallback(ai, {
+          primaryModel: "gemini-3.8-flash",
+          contents: userContent,
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+          },
+        });
 
-      return res.json({ analysis: response.text });
+        return res.json({ analysis: response.text, modelUsed, source: "gemini_api" });
+      } catch (geminiError: unknown) {
+        console.warn("[Gemini Fallback Activated] Gemini API returned temporary demand spike (503) or error. Synthesizing local tactical diagnostic.", geminiError);
+        const localDiagnostic = synthesizeLocalTelemetryDiagnostic(metrics, manifest, prompt);
+        return res.json({
+          analysis: localDiagnostic,
+          source: "local_telemetry_matrix_fallback",
+          notice: "Gemini model is currently experiencing temporary high demand (503). Local tactical telemetry matrix synthesized this diagnostic.",
+        });
+      }
     } catch (error: unknown) {
-      console.error("Gemini API error:", error);
-      const msg = error instanceof Error ? error.message : "Failed to execute Gemini telemetry analysis.";
-      return res.status(500).json({ error: msg });
+      console.error("Diagnostic endpoint error:", error);
+      const localDiagnostic = synthesizeLocalTelemetryDiagnostic(metrics, manifest, prompt);
+      return res.json({
+        analysis: localDiagnostic,
+        source: "local_telemetry_matrix_fallback",
+        notice: "Operational failover engaged.",
+      });
     }
   });
 
@@ -703,7 +801,8 @@ NODES BOUND: ${manifest?.msdCanvas?.nodes?.length || 0}`;
     if (!apiKey) {
       clientWs.send(JSON.stringify({
         type: "error",
-        error: "GEMINI_API_KEY is not configured in server environment.",
+        error: "GEMINI_API_KEY is not configured in server environment. Reverting to Windows Read Aloud voice engine.",
+        tts_fallback: true,
       }));
       clientWs.close();
       return;
@@ -726,9 +825,10 @@ NODES BOUND: ${manifest?.msdCanvas?.nodes?.length || 0}`;
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName } },
           },
-          systemInstruction: `You are the MythOS Voice Control & Tactical Execution AI for the Master Systems Display (MSD) console.
+          systemInstruction: `You are the attendant VOXCON Agent and Tactical Execution AI for the Master Systems Display (MSD) console.
 You take voice input and natural language orders from the operator and execute them immediately using your tools.
 Your active vocal persona is ${voiceName}.
+When the voice uplink becomes active or when initialized, your first transmission must immediately state: "VOXCON Active. Standing by."
 You must adhere strictly to Department of Defense (DoD) & U.S. Navy Operational Communication Standards:
 1. BLUF: Begin your acknowledgment with a Bottom Line Up Front statement of the action taken in the first sentence.
 2. Active Voice: Speak in the active voice.
@@ -987,6 +1087,7 @@ Execute orders decisively without unnecessary disclaimers.`,
               clientWs.send(JSON.stringify({
                 type: "error",
                 error: err instanceof Error ? err.message : String(err),
+                tts_fallback: true,
               }));
             }
           },
@@ -994,6 +1095,17 @@ Execute orders decisively without unnecessary disclaimers.`,
       });
 
       clientWs.send(JSON.stringify({ type: "status", status: "connected" }));
+
+      // Prompt VOXCON Agent to vocalize activation greeting immediately upon connection (staggered slightly to allow tactical chime to ring)
+      setTimeout(() => {
+        try {
+          session.sendRealtimeInput({
+            text: "Uplink connected. Immediately vocalize this exact greeting to the operator: 'VOXCON Active. Standing by.'",
+          });
+        } catch (greetErr) {
+          console.warn("[LiveWS] Failed to dispatch activation greeting trigger:", greetErr);
+        }
+      }, 180);
 
       // Forward client audio / text to Live session
       clientWs.on("message", (raw) => {
@@ -1026,6 +1138,7 @@ Execute orders decisively without unnecessary disclaimers.`,
         clientWs.send(JSON.stringify({
           type: "error",
           error: error instanceof Error ? error.message : "Failed to initialize Live API session.",
+          tts_fallback: true,
         }));
         clientWs.close();
       }

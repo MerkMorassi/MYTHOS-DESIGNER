@@ -78,12 +78,14 @@ export const ModernBottomBar: React.FC<ModernBottomBarProps> = ({
         {onRefreshData && (
           <button
             type="button"
+            id="footer-recalibrate-btn"
+            data-voice-target="recalibrate refresh telemetry"
             onClick={() => {
               soundEngine.playChime();
               onRefreshData();
             }}
             className="px-2 py-1 rounded bg-[#0b101c] hover:bg-white/10 border border-[#232f48] text-slate-300 hover:text-white flex items-center gap-1 transition-colors cursor-pointer text-[11px]"
-            title="Recalibrate sensors and telemetry sync"
+            title="Recalibrate sensors and telemetry sync (Voice: 'Recalibrate')"
           >
             <RotateCw className="w-3 h-3 text-cyan-400" />
             <span>RECALIBRATE</span>

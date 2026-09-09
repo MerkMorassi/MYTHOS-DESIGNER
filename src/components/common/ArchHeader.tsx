@@ -4,7 +4,7 @@ import { THEMES } from '../../constants/themes';
 import { PillboxButton } from './PillboxButton';
 import { soundEngine } from '../../utils/audio';
 import { TemplatePresetDropdown } from './TemplatePresetDropdown';
-import { Volume2, VolumeX, Sparkles, Sliders, ShieldCheck, Layers, Cpu, Mic, MicOff, Power } from 'lucide-react';
+import { Volume2, VolumeX, Sparkles, Sliders, ShieldCheck, Layers, Cpu, Mic, MicOff, Power, Pause, Play, RotateCw } from 'lucide-react';
 
 interface ArchHeaderProps {
   headerData: MSDHeader;
@@ -16,8 +16,10 @@ interface ArchHeaderProps {
   onSelectTemplate?: (templateKey: string) => void;
   currentTemplateId?: string;
   voiceActive?: boolean;
+  voiceConnecting?: boolean;
   voiceMicActive?: boolean;
   voiceSpeaking?: boolean;
+  onConnectVoice?: () => void;
   onToggleVoiceMic?: () => void;
   onDisconnectVoice?: () => void;
 }
@@ -32,8 +34,10 @@ export const ArchHeader: React.FC<ArchHeaderProps> = ({
   onSelectTemplate,
   currentTemplateId,
   voiceActive,
+  voiceConnecting,
   voiceMicActive,
   voiceSpeaking: _voiceSpeaking,
+  onConnectVoice,
   onToggleVoiceMic,
   onDisconnectVoice,
 }) => {
@@ -177,12 +181,73 @@ export const ArchHeader: React.FC<ArchHeaderProps> = ({
 
           <button
             type="button"
+            id="arch-header-sound-toggle-btn"
             onClick={toggleAudio}
             title={audioEnabled ? 'Mute Tactical Audio' : 'Unmute Tactical Audio'}
             className="p-1.5 rounded-sm bg-[#111111] border border-[#333333] text-slate-300 hover:text-blue-400 hover:border-blue-400 transition-colors"
           >
             {audioEnabled ? <Volume2 className="w-4 h-4 text-green-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
           </button>
+
+          {/* Voice Uplink Master & Standby Controller */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              id="arch-header-voice-control-shortcut-btn"
+              onClick={() => {
+                soundEngine.playToggle();
+                if (voiceActive) {
+                  onDisconnectVoice?.();
+                } else {
+                  onConnectVoice?.();
+                }
+              }}
+              disabled={voiceConnecting}
+              title={
+                voiceActive
+                  ? 'Terminate Voice Uplink (Disconnect Live Session)'
+                  : voiceConnecting
+                  ? 'Connecting Voice Uplink...'
+                  : 'Initialize Voice Uplink (Connect Live Gemini Session)'
+              }
+              className={`p-1.5 rounded-sm border transition-colors cursor-pointer flex items-center gap-1 ${
+                voiceActive
+                  ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                  : voiceConnecting
+                  ? 'bg-amber-950/90 border-amber-500 text-amber-300 animate-pulse'
+                  : 'bg-[#111111] border-[#333333] text-slate-300 hover:text-cyan-400 hover:border-cyan-400'
+              }`}
+            >
+              {voiceConnecting ? (
+                <RotateCw className="w-4 h-4 animate-spin text-amber-400" />
+              ) : voiceActive ? (
+                <Mic className="w-4 h-4 text-emerald-400 animate-pulse" />
+              ) : (
+                <MicOff className="w-4 h-4 text-slate-400" />
+              )}
+              {voiceActive && <span className="text-[9px] font-mono font-bold text-emerald-300">LIVE</span>}
+            </button>
+
+            {voiceActive && (
+              <button
+                type="button"
+                id="arch-header-voice-standby-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  soundEngine.playToggle();
+                  onToggleVoiceMic?.();
+                }}
+                title={voiceMicActive ? 'Standby Mode (Pause Microphone)' : 'Resume Voice (Exit Standby)'}
+                className={`p-1.5 rounded-sm border transition-colors cursor-pointer ${
+                  voiceMicActive
+                    ? 'bg-[#111111] border-emerald-700/60 text-emerald-400 hover:border-emerald-500'
+                    : 'bg-amber-950/80 border-amber-600 text-amber-300 hover:bg-amber-900'
+                }`}
+              >
+                {voiceMicActive ? <Pause className="w-4 h-4 text-amber-400" /> : <Play className="w-4 h-4 text-emerald-400 animate-pulse" />}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

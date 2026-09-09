@@ -25,7 +25,6 @@ import { VoiceControlModule } from './components/voice/VoiceControlModule';
 import { ThemeForgeModal } from './components/theme/ThemeForgeModal';
 import { soundEngine } from './utils/audio';
 import { useLiveVoiceControl } from './hooks/useLiveVoiceControl';
-import { Mic, MicOff } from 'lucide-react';
 
 export default function App() {
   const [manifest, setManifest] = useState<MSDLayoutManifest>(
@@ -430,8 +429,10 @@ export default function App() {
         onSelectTemplate={handleSelectTemplate}
         currentTemplateId={manifest.layoutId}
         voiceActive={voiceControl.isConnected}
+        voiceConnecting={voiceControl.isConnecting}
         voiceMicActive={voiceControl.isMicActive}
         voiceSpeaking={voiceControl.isSpeaking}
+        onConnectVoice={voiceControl.connect}
         onToggleVoiceMic={voiceControl.toggleMic}
         onDisconnectVoice={voiceControl.disconnect}
       />
@@ -542,51 +543,6 @@ export default function App() {
           )}
         </main>
       </div>
-
-      {/* Ambient Voice HUD: persists across other tabs when voice uplink is active */}
-      {voiceControl.isConnected && appMode !== 'voice-control' && (
-        <aside
-          aria-label="Ambient Voice Control HUD"
-          className="fixed bottom-12 right-4 z-40 flex items-center gap-2.5 p-2 px-3.5 rounded-lg bg-[#07131b]/95 border border-emerald-500/50 shadow-2xl backdrop-blur-md font-mono-data text-xs text-slate-200 animate-fade-in"
-        >
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-          </span>
-          <span className="text-emerald-400 font-bold tracking-wider">VOICE LIVE</span>
-          {voiceControl.isSpeaking ? (
-            <span className="text-cyan-300 font-semibold animate-pulse">Responding...</span>
-          ) : voiceControl.isMicActive ? (
-            <span className="text-slate-300">Listening...</span>
-          ) : (
-            <span className="text-amber-400">Mic Muted</span>
-          )}
-          <div className="h-3 w-[1px] bg-slate-700 mx-0.5" />
-          <button
-            type="button"
-            onClick={voiceControl.toggleMic}
-            className={`p-1 rounded cursor-pointer transition-colors ${
-              voiceControl.isMicActive
-                ? 'text-emerald-400 hover:text-emerald-200 bg-emerald-950/60 border border-emerald-700/60'
-                : 'text-amber-400 hover:text-amber-200 bg-amber-950/60 border border-amber-700/60'
-            }`}
-            title={voiceControl.isMicActive ? 'Mute Microphone' : 'Unmute Microphone'}
-          >
-            {voiceControl.isMicActive ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              soundEngine.playToggle();
-              setAppMode('voice-control');
-            }}
-            className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[10px] uppercase font-bold border border-emerald-500/40 cursor-pointer transition-all"
-            title="Switch to Full Voice Control Console"
-          >
-            Console
-          </button>
-        </aside>
-      )}
 
       {/* Base Framing Bottom Runner */}
       {isModernArchetype ? (

@@ -48,11 +48,14 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
     executedOrders,
     errorMessage,
     selectedVoice,
+    isTtsFallbackActive,
+    fallbackVoiceName,
     changeVoice,
     connect,
     disconnect,
     toggleMic,
     sendOrderText,
+    testWindowsVoice,
   } = voiceControl;
 
   const handleSendCustomPrompt = (e: React.FormEvent) => {
@@ -119,6 +122,20 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
               <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
                 gemini-3.1-flash-live-preview
               </span>
+              {isTtsFallbackActive ? (
+                <span
+                  id="tts-fallback-badge"
+                  className="text-xs px-2 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-600/70 font-mono-data font-bold flex items-center gap-1 animate-pulse"
+                  title="Gemini Live audio unavailable; operating on default Windows Read Aloud voice"
+                >
+                  <AlertTriangle className="w-3 h-3 text-amber-400" />
+                  TTS FALLBACK: WINDOWS READ ALOUD ({fallbackVoiceName})
+                </span>
+              ) : (
+                <span className="text-xs px-2 py-0.5 rounded bg-emerald-950/30 text-emerald-400 border border-emerald-800/50 font-mono-data">
+                  TTS: GEMINI LIVE AUDIO
+                </span>
+              )}
             </div>
             <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
               <span>STATE:</span>
@@ -132,7 +149,7 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
               )}
               {isSpeaking && (
                 <span className="text-blue-400 flex items-center gap-1 font-semibold ml-2">
-                  <Volume2 className="w-3.5 h-3.5 animate-bounce" /> AI VOCALIZING
+                  <Volume2 className="w-3.5 h-3.5 animate-bounce" /> {isTtsFallbackActive ? 'WINDOWS READ ALOUD VOCALIZING' : 'AI VOCALIZING'}
                 </span>
               )}
             </div>
@@ -160,6 +177,18 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
               <option value="Puck" className="bg-slate-900 text-slate-200">Puck (Upbeat / Dynamic)</option>
             </select>
           </div>
+
+          {/* Test Windows Read Aloud Button */}
+          <button
+            type="button"
+            id="test-windows-voice-btn"
+            onClick={testWindowsVoice}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold uppercase tracking-wider bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 text-slate-300 transition-all"
+            title={`Test Default Windows Read Aloud Voice (${fallbackVoiceName})`}
+          >
+            <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+            <span>TEST READ ALOUD</span>
+          </button>
 
           {isConnected ? (
             <>
@@ -292,7 +321,9 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
             <div className="text-center">
               <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold">
                 {isSpeaking
-                  ? 'SYNTHESIZING VOCAL RESPONSE'
+                  ? isTtsFallbackActive
+                    ? `WINDOWS READ ALOUD ACTIVE (${fallbackVoiceName})`
+                    : 'SYNTHESIZING VOCAL RESPONSE'
                   : isConnected && isMicActive
                   ? 'AWAITING OPERATOR VOICE ORDERS'
                   : isConnected
@@ -300,7 +331,9 @@ export const VoiceControlModule: React.FC<VoiceControlModuleProps> = ({
                   : 'INITIALIZE TO BEGIN VOICE CONTROL'}
               </div>
               <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                Speak commands naturally. The AI recognizes directives, triggers system tools, and confirms execution verbally.
+                {isTtsFallbackActive
+                  ? `Gemini AI live audio is bypassed; speech synthesis is routed to default Windows Read Aloud (${fallbackVoiceName}).`
+                  : 'Speak commands naturally. The AI recognizes directives, triggers system tools, and confirms execution verbally.'}
               </p>
             </div>
 

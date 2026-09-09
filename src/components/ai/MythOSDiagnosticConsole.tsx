@@ -20,11 +20,14 @@ export const MythOSDiagnosticConsole: React.FC<MythOSDiagnosticConsoleProps> = (
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [activeModel, setActiveModel] = useState<string>('GEMINI 3.8 FLASH');
 
   const handleAnalyze = async (customPrompt?: string) => {
     soundEngine.playChime();
     setLoading(true);
     setErrorMsg(null);
+    setNotice(null);
 
     const activePrompt = customPrompt || prompt || 'Analyze overall quantum core coherence and thermodynamic entropy.';
 
@@ -41,10 +44,27 @@ export const MythOSDiagnosticConsole: React.FC<MythOSDiagnosticConsoleProps> = (
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to communicate with MythOS AI Engine.');
+        let msg = data.error || 'Failed to communicate with MythOS AI Engine.';
+        try {
+          if (typeof msg === 'string' && msg.includes('{')) {
+            const parsed = JSON.parse(msg.replace(/^ApiError:\s*/, ''));
+            if (parsed?.error?.message) {
+              msg = parsed.error.message;
+            }
+          }
+        } catch {}
+        throw new Error(msg);
       }
 
       setReport(data.analysis);
+      if (data.modelUsed) {
+        setActiveModel(String(data.modelUsed).replace(/-/g, ' ').toUpperCase());
+      } else if (data.source === 'local_telemetry_matrix_fallback' || data.source === 'local_diagnostic_matrix') {
+        setActiveModel('LOCAL TACTICAL MATRIX');
+      }
+      if (data.notice) {
+        setNotice(data.notice);
+      }
     } catch (err: unknown) {
       soundEngine.playAlert();
       setErrorMsg(err instanceof Error ? err.message : 'AI Analysis request failed.');
@@ -158,10 +178,24 @@ export const MythOSDiagnosticConsole: React.FC<MythOSDiagnosticConsoleProps> = (
               <span>TACTICAL DIAGNOSTIC REPORT OUTPUT</span>
             </div>
 
-            <span className="font-mono-data text-xs text-slate-400">
-              MODEL: GEMINI 3.8 FLASH
-            </span>
+            <div className="flex items-center gap-2">
+              {notice && (
+                <span className="font-mono-data text-[10px] text-amber-300 bg-amber-950/60 border border-amber-600/80 px-2 py-0.5 rounded">
+                  FAILOVER ENGAGED
+                </span>
+              )}
+              <span className="font-mono-data text-xs text-cyan-400 bg-cyan-950/40 border border-cyan-800/60 px-2 py-0.5 rounded">
+                MODEL: {activeModel}
+              </span>
+            </div>
           </div>
+
+          {notice && (
+            <div className="p-2.5 bg-amber-950/50 border border-amber-600/70 rounded text-xs font-mono-data text-amber-200 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span>{notice}</span>
+            </div>
+          )}
 
           {errorMsg && (
             <div className="p-3 bg-red-950/80 border border-red-500 rounded text-xs font-mono-data text-red-300 flex items-center gap-2">

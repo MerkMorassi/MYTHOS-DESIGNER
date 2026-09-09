@@ -29,6 +29,8 @@ interface ModernDashboardViewProps {
   anomalySimulated: boolean;
   onUpdateMetric: (key: string, value: number) => void;
   onClearCustomImage?: () => void;
+  activeTab?: 'dashboard' | 'schematic' | 'split';
+  onTabChange?: (tab: 'dashboard' | 'schematic' | 'split') => void;
 }
 
 export const ModernDashboardView: React.FC<ModernDashboardViewProps> = ({
@@ -40,8 +42,17 @@ export const ModernDashboardView: React.FC<ModernDashboardViewProps> = ({
   anomalySimulated,
   onUpdateMetric,
   onClearCustomImage,
+  activeTab: controlledActiveTab,
+  onTabChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schematic' | 'split'>('dashboard');
+  const [internalActiveTab, setInternalActiveTab] = useState<'dashboard' | 'schematic' | 'split'>('dashboard');
+  const activeTab = controlledActiveTab !== undefined ? controlledActiveTab : internalActiveTab;
+
+  const handleSelectTab = (tab: 'dashboard' | 'schematic' | 'split') => {
+    soundEngine.playToggle();
+    setInternalActiveTab(tab);
+    onTabChange?.(tab);
+  };
   const [filterSeverity, setFilterSeverity] = useState<'all' | 'nominal' | 'alert'>('all');
   const theme = THEMES[currentTheme] || THEMES['noir-dark'];
 
@@ -79,15 +90,15 @@ export const ModernDashboardView: React.FC<ModernDashboardViewProps> = ({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => {
-              soundEngine.playToggle();
-              setActiveTab('dashboard');
-            }}
+            id="tab-extrapolated-dashboard"
+            data-voice-target="extrapolated dashboard"
+            onClick={() => handleSelectTab('dashboard')}
             className={`px-3 py-1.5 text-xs font-mono-data font-bold rounded flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'dashboard'
-                ? 'bg-blue-600 text-white shadow'
+                ? 'bg-blue-600 text-white shadow ring-1 ring-blue-400'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
+            title="Extrapolated Telemetry & Pod Status Dashboard (Voice: 'Extrapolated Dashboard')"
           >
             <Activity className="w-3.5 h-3.5" />
             <span>EXTRAPOLATED DASHBOARD</span>
@@ -95,15 +106,15 @@ export const ModernDashboardView: React.FC<ModernDashboardViewProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              soundEngine.playToggle();
-              setActiveTab('schematic');
-            }}
+            id="tab-schematic-canvas"
+            data-voice-target="schematic canvas"
+            onClick={() => handleSelectTab('schematic')}
             className={`px-3 py-1.5 text-xs font-mono-data font-bold rounded flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'schematic'
-                ? 'bg-blue-600 text-white shadow'
+                ? 'bg-blue-600 text-white shadow ring-1 ring-blue-400'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
+            title="MSD Schematic Canvas & Hotspot Telemetry (Voice: 'Schematic Canvas')"
           >
             <Layers className="w-3.5 h-3.5" />
             <span>SCHEMATIC CANVAS</span>
@@ -116,15 +127,15 @@ export const ModernDashboardView: React.FC<ModernDashboardViewProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              soundEngine.playToggle();
-              setActiveTab('split');
-            }}
+            id="tab-split-observability"
+            data-voice-target="split observability"
+            onClick={() => handleSelectTab('split')}
             className={`px-3 py-1.5 text-xs font-mono-data font-bold rounded flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'split'
-                ? 'bg-blue-600 text-white shadow'
+                ? 'bg-blue-600 text-white shadow ring-1 ring-blue-400'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
+            title="Dual-Split Observability View (Voice: 'Split Observability')"
           >
             <Server className="w-3.5 h-3.5" />
             <span>SPLIT OBSERVABILITY</span>
@@ -149,11 +160,28 @@ export const ModernDashboardView: React.FC<ModernDashboardViewProps> = ({
           return (
             <div
               key={kpi.id || idx}
-              className="p-3.5 rounded-lg border flex flex-col justify-between gap-2 shadow-sm transition-all hover:border-slate-400/50"
+              id={`kpi-card-${kpi.id || idx}`}
+              data-voice-target={kpi.label.toLowerCase()}
+              className="p-3.5 rounded-lg border flex flex-col justify-between gap-2 shadow-sm transition-all hover:border-slate-400/50 cursor-pointer"
               style={{
                 backgroundColor: theme.colors.bgSlate,
                 borderColor: theme.colors.border,
               }}
+              onClick={() => {
+                soundEngine.playToggle();
+                if (kpi.metricKey) {
+                  onSelectNode({
+                    id: `node-${kpi.metricKey}`,
+                    label: kpi.label,
+                    description: `Primary KPI telemetry metric node for ${kpi.label}.`,
+                    status: 'nominal',
+                    coordinates: { x: 50, y: 50 },
+                    subsystem: 'telemetry',
+                    metricKey: kpi.metricKey,
+                  });
+                }
+              }}
+              title={`KPI: ${kpi.label} (Voice: '${kpi.label}')`}
             >
               <div className="flex items-center justify-between text-xs text-slate-400 font-mono-data">
                 <span className="uppercase font-semibold tracking-wider">{kpi.label}</span>
@@ -296,7 +324,24 @@ export const ModernDashboardView: React.FC<ModernDashboardViewProps> = ({
                   </thead>
                   <tbody className="divide-y divide-[#172033]">
                     {podFleet.map((pod) => (
-                      <tr key={pod.id} className="hover:bg-white/5 transition-colors">
+                      <tr
+                        key={pod.id}
+                        id={`pod-row-${pod.id}`}
+                        data-voice-target={pod.name.toLowerCase()}
+                        className="hover:bg-white/5 transition-colors cursor-pointer"
+                        onClick={() => {
+                          soundEngine.playToggle();
+                          onSelectNode({
+                            id: `node-${pod.id}`,
+                            label: pod.name,
+                            description: `Pod Cluster Worker: ${pod.name} in ${pod.region}. Status: ${pod.status}, Load: ${pod.load}, Latency: ${pod.latency}.`,
+                            status: pod.status === 'Healthy' ? 'nominal' : 'critical',
+                            coordinates: { x: 50, y: 50 },
+                            subsystem: 'compute',
+                          });
+                        }}
+                        title={`Cluster Pod: ${pod.name} (Voice: '${pod.name}')`}
+                      >
                         <td className="py-2.5 font-bold text-slate-200">{pod.name}</td>
                         <td className="py-2.5 text-slate-400">{pod.region}</td>
                         <td className="py-2.5">

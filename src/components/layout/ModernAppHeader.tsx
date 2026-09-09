@@ -17,7 +17,10 @@ import {
   Activity,
   ChevronRight,
   ShieldCheck,
-  LayoutGrid
+  LayoutGrid,
+  Pause,
+  Play,
+  RotateCw
 } from 'lucide-react';
 
 interface ModernAppHeaderProps {
@@ -30,8 +33,10 @@ interface ModernAppHeaderProps {
   onSelectTemplate?: (templateKey: string) => void;
   currentTemplateId?: string;
   voiceActive?: boolean;
+  voiceConnecting?: boolean;
   voiceMicActive?: boolean;
   voiceSpeaking?: boolean;
+  onConnectVoice?: () => void;
   onToggleVoiceMic?: () => void;
   onDisconnectVoice?: () => void;
 }
@@ -46,20 +51,47 @@ export const ModernAppHeader: React.FC<ModernAppHeaderProps> = ({
   onSelectTemplate,
   currentTemplateId,
   voiceActive,
+  voiceConnecting,
   voiceMicActive,
   voiceSpeaking: _voiceSpeaking,
+  onConnectVoice,
   onToggleVoiceMic,
   onDisconnectVoice,
 }) => {
   const [muted, setMuted] = React.useState(soundEngine.isMuted());
   const [isEditorExpanded, setIsEditorExpanded] = React.useState<boolean>(true);
+  const [prevMode, setPrevMode] = React.useState<AppMode>('msd-view');
   const theme = THEMES[currentTheme] || THEMES['noir-dark'];
+
+  React.useEffect(() => {
+    if (appMode !== 'voice-control') {
+      setPrevMode(appMode);
+    }
+  }, [appMode]);
 
   const toggleSound = () => {
     const isNowMuted = soundEngine.toggleMute();
     setMuted(isNowMuted);
     if (!isNowMuted) {
       soundEngine.playBeep(880, 'sine', 0.08);
+    }
+  };
+
+  const handleVoiceUplinkToggle = () => {
+    soundEngine.playToggle();
+    if (voiceActive) {
+      onDisconnectVoice?.();
+    } else {
+      onConnectVoice?.();
+    }
+  };
+
+  const toggleVoiceControlShortcut = () => {
+    soundEngine.playToggle();
+    if (appMode === 'voice-control') {
+      onAppModeChange(prevMode || 'msd-view');
+    } else {
+      onAppModeChange('voice-control');
     }
   };
 
@@ -121,46 +153,25 @@ export const ModernAppHeader: React.FC<ModernAppHeaderProps> = ({
 
         {/* Right: Voice Active HUD, Editor Mode Toggle (+ / -), Audio Toggle & Telemetry State */}
         <div className="flex items-center gap-2">
-          {/* Persistent Live Voice Status Widget when voice is active */}
+          {/* Persistent Live Voice Status Badge when voice is active */}
           {voiceActive && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#06141c] border border-emerald-500/50 text-[11px] font-mono-data text-emerald-400 shadow-sm animate-pulse">
+            <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-[#06141c] border border-emerald-500/50 text-[11px] font-mono-data text-emerald-400 shadow-sm animate-pulse">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span className="font-bold tracking-wider hidden sm:inline text-emerald-300">VOICE LIVE</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleVoiceMic?.();
-                }}
-                className={`p-1 rounded cursor-pointer transition-colors ${
-                  voiceMicActive
-                    ? 'text-emerald-400 hover:text-emerald-200 bg-emerald-950/60 border border-emerald-700/60'
-                    : 'text-amber-400 hover:text-amber-200 bg-amber-950/60 border border-amber-700/60'
-                }`}
-                title={voiceMicActive ? 'Mute Microphone' : 'Unmute Microphone'}
-              >
-                {voiceMicActive ? <Mic className="w-3 h-3" /> : <MicOff className="w-3 h-3" />}
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDisconnectVoice?.();
-                }}
-                className="p-1 rounded text-red-400 hover:text-red-200 hover:bg-red-950/60 border border-transparent hover:border-red-800 transition-colors cursor-pointer"
-                title="Disconnect Voice Uplink"
-              >
-                <Power className="w-3 h-3" />
-              </button>
+              <span className="font-bold tracking-wider text-emerald-300">VOXCONPACK LIVE</span>
+              <span className="text-[10px] text-slate-400 font-normal">
+                {voiceMicActive ? '(LISTENING)' : '(STANDBY)'}
+              </span>
             </div>
           )}
 
           {/* Show / Hide Toggle between Editor Mode and Preview Actual Theme */}
           <button
             type="button"
+            id="header-editor-toggle-btn"
+            data-voice-target="editor mode preview theme"
             onClick={() => {
               soundEngine.playToggle();
               setIsEditorExpanded(!isEditorExpanded);
@@ -173,8 +184,8 @@ export const ModernAppHeader: React.FC<ModernAppHeaderProps> = ({
             }}
             title={
               isEditorExpanded
-                ? '[-] Hide editor controls to preview actual theme'
-                : '[+] Show editor controls (Editor Mode)'
+                ? '[-] Hide editor controls to preview actual theme (Voice: "Preview Theme")'
+                : '[+] Show editor controls (Voice: "Editor Mode")'
             }
           >
             <span className="text-sm font-black leading-none w-3 text-center">
@@ -188,12 +199,79 @@ export const ModernAppHeader: React.FC<ModernAppHeaderProps> = ({
           {/* Sound Toggle */}
           <button
             type="button"
+            id="header-sound-toggle-btn"
             onClick={toggleSound}
             className="p-1.5 rounded border border-[#2a3447] text-slate-400 hover:text-white hover:border-slate-400 transition-colors cursor-pointer bg-[#0b0f19]"
             title={muted ? 'Unmute Audio' : 'Mute Audio'}
           >
             {muted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
           </button>
+
+          {/* Voice Uplink Master & Standby Controller: Immediately INITIALIZES VOICE UPLINK, TERMINATES, and STANDBY PAUSE */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              id="header-voice-control-shortcut-btn"
+              onClick={handleVoiceUplinkToggle}
+              disabled={voiceConnecting}
+              className={`p-1.5 rounded border transition-all cursor-pointer flex items-center gap-1.5 ${
+                voiceActive
+                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                  : voiceConnecting
+                  ? 'bg-amber-950/80 border-amber-500 text-amber-300 animate-pulse'
+                  : 'bg-[#0b0f19] border-[#2a3447] text-slate-400 hover:text-white hover:border-slate-400'
+              }`}
+              title={
+                voiceActive
+                  ? 'Terminate Voice Uplink (Sever Gemini Live Session)'
+                  : voiceConnecting
+                  ? 'Establishing Voice Uplink...'
+                  : 'Initialize Voice Uplink (Connect Live Gemini Session)'
+              }
+            >
+              {voiceConnecting ? (
+                <RotateCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+              ) : voiceActive ? (
+                <Mic className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              ) : (
+                <MicOff className="w-3.5 h-3.5 text-slate-400 hover:text-cyan-300" />
+              )}
+              {voiceActive && (
+                <span className="text-[10px] font-mono-data font-bold tracking-wider text-emerald-300 pr-0.5">
+                  LIVE
+                </span>
+              )}
+            </button>
+
+            {/* Standby / Pause Button: Appears when Uplink is Connected */}
+            {voiceActive && (
+              <button
+                type="button"
+                id="header-voice-standby-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  soundEngine.playToggle();
+                  onToggleVoiceMic?.();
+                }}
+                className={`p-1.5 rounded border transition-all cursor-pointer flex items-center justify-center ${
+                  voiceMicActive
+                    ? 'bg-[#0b0f19] border-emerald-700/60 text-emerald-400 hover:text-emerald-200 hover:border-emerald-500'
+                    : 'bg-amber-950/80 border-amber-600 text-amber-300 hover:bg-amber-900 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
+                }`}
+                title={
+                  voiceMicActive
+                    ? 'Standby Mode (Pause Microphone - Keeps Session Alive)'
+                    : 'Resume Voice (Exit Standby - Mic Transmitting)'
+                }
+              >
+                {voiceMicActive ? (
+                  <Pause className="w-3.5 h-3.5 text-amber-400" />
+                ) : (
+                  <Play className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                )}
+              </button>
+            )}
+          </div>
 
           {/* Live Pulse Indicator */}
           <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-[#060a12] border border-[#1e293b] font-mono-data text-[10px] text-emerald-400">
@@ -216,6 +294,8 @@ export const ModernAppHeader: React.FC<ModernAppHeaderProps> = ({
                   <button
                     key={item.id}
                     type="button"
+                    id={`nav-btn-${item.id}`}
+                    data-voice-target={item.label.toLowerCase()}
                     onClick={() => {
                       soundEngine.playToggle();
                       onAppModeChange(item.id);
@@ -228,6 +308,7 @@ export const ModernAppHeader: React.FC<ModernAppHeaderProps> = ({
                     style={{
                       backgroundColor: isActive ? theme.colors.primary : 'transparent',
                     }}
+                    title={`${item.label} (Voice: '${item.label}')`}
                   >
                     <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-black' : item.id === 'voice-control' && voiceActive ? 'text-emerald-400' : 'text-slate-400'}`} />
                     <span>{item.label}</span>
@@ -244,12 +325,14 @@ export const ModernAppHeader: React.FC<ModernAppHeaderProps> = ({
               {/* 06. SKETCH THEME */}
               <button
                 type="button"
+                id="nav-btn-sketch-theme"
+                data-voice-target="sketch theme theme forge"
                 onClick={() => {
                   soundEngine.playChime();
                   onOpenThemeForge();
                 }}
                 className="w-full py-1.5 px-2 text-xs font-mono-data font-semibold rounded flex items-center justify-center gap-1.5 whitespace-nowrap transition-all cursor-pointer text-amber-300 hover:text-amber-100 hover:bg-amber-400/10 border border-amber-500/30 shadow-sm"
-                title="Synthesize a new Theme and Page Template from sketches or files"
+                title="Synthesize a new Theme and Page Template from sketches or files (Voice: 'Sketch Theme' or 'Theme Forge')"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
                 <span>06. SKETCH THEME</span>

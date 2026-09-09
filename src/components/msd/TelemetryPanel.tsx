@@ -77,6 +77,9 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
                 </div>
                 <input
                   type="range"
+                  id="metric-slider-override"
+                  name={selectedMetric.key}
+                  data-voice-target={`${selectedMetric.label} ${selectedMetric.key} override knob slider`}
                   min={selectedMetric.min}
                   max={selectedMetric.max}
                   step={(selectedMetric.max - selectedMetric.min) / 100}
@@ -121,6 +124,8 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
           return (
             <div
               key={m.key}
+              id={`metric-card-${m.key}`}
+              data-voice-target={`${m.label.toLowerCase()} card`}
               className="bg-[#101216] p-2.5 rounded border border-[#2f3749] flex flex-col gap-1.5 hover:border-cyan-500/40 transition-colors"
             >
               <div className="flex items-center justify-between font-antonio text-xs font-bold uppercase tracking-wider text-slate-200">
@@ -152,12 +157,16 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
                 <span>{m.min}</span>
                 <input
                   type="range"
+                  id={`slider-${m.key}`}
+                  name={m.key}
+                  data-voice-target={`${m.label.toLowerCase()} ${m.key} knob slider`}
                   min={m.min}
                   max={m.max}
                   step={(m.max - m.min) / 50}
                   value={m.value}
                   onChange={(e) => onUpdateMetric(m.key, parseFloat(e.target.value))}
                   className="w-28 h-1 bg-[#1c3c55] rounded appearance-none cursor-pointer accent-cyan-400"
+                  title={`${m.label} Knob (Voice: 'Adjust ${m.label} to [value]')`}
                 />
                 <span>{m.max}</span>
               </div>
