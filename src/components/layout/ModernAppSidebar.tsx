@@ -198,6 +198,27 @@ export const ModernAppSidebar: React.FC<ModernAppSidebarProps> = ({
           )}
         </button>
       </div>
+
+      {/* Blank expansion container expanding to fill layout height */}
+      <div
+        className="p-3 rounded-lg border flex flex-col gap-2 shadow-sm flex-grow w-full min-h-[140px] transition-all duration-300"
+        style={{
+          backgroundColor: theme.colors.bgSlate,
+          borderColor: theme.colors.border,
+        }}
+      >
+        <div className="flex items-center justify-between text-xs font-mono-data font-bold text-slate-200">
+          <span className="flex items-center gap-1.5 text-slate-400">
+            AUX EXPANSION PORT
+          </span>
+          <span className="text-[10px] text-slate-500 font-mono-data">READY</span>
+        </div>
+        <div className="flex-grow flex flex-col items-center justify-center border border-dashed rounded border-slate-700/50 p-4 bg-[#050b14]/50">
+          <span className="text-[10px] text-slate-500 tracking-wider font-mono-data uppercase">
+            EXPANSION PORT // STANDBY
+          </span>
+        </div>
+      </div>
     </aside>
   );
 };

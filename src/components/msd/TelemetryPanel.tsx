@@ -2,7 +2,7 @@ import React from 'react';
 import { MSDNode, SystemMetric, ThemeId } from '../../types/msd';
 import { THEMES } from '../../constants/themes';
 import { soundEngine } from '../../utils/audio';
-import { Activity, Sliders, ShieldCheck, Zap, AlertCircle, X, BarChart3 } from 'lucide-react';
+import { Activity, Sliders, ShieldCheck, Zap, AlertCircle, X, BarChart3, TrendingUp, TrendingDown, ShieldAlert } from 'lucide-react';
 
 interface TelemetryPanelProps {
   metrics: Record<string, SystemMetric>;
@@ -11,6 +11,69 @@ interface TelemetryPanelProps {
   onUpdateMetric: (key: string, newValue: number) => void;
   currentTheme: ThemeId;
   anomalySimulated: boolean;
+}
+
+export function calculateStabilityForecast(m: SystemMetric) {
+  const history = m.history || [];
+  if (history.length === 0) {
+    return { sma: m.value, trend: 'STABLE' as const, risk: 'LOW' as const, riskScore: 0, delta: 0 };
+  }
+  
+  const sma = history.reduce((sum, val) => sum + val, 0) / history.length;
+  
+  const recentHistory = history.slice(-3);
+  let delta = 0;
+  if (recentHistory.length >= 2) {
+    delta = recentHistory[recentHistory.length - 1] - recentHistory[0];
+  }
+  
+  let trend: 'UPWARD' | 'DOWNWARD' | 'STABLE' = 'STABLE';
+  const rangeWidth = m.max - m.min;
+  const movementThreshold = rangeWidth * 0.003;
+  if (Math.abs(delta) > movementThreshold) {
+    trend = delta > 0 ? 'UPWARD' : 'DOWNWARD';
+  }
+
+  const [nomMin, nomMax] = m.nominalRange;
+  let riskScore = 0;
+  
+  if (sma >= nomMax || sma <= nomMin) {
+    riskScore = 100;
+  } else {
+    const distToMax = nomMax - sma;
+    const distToMin = sma - nomMin;
+    const totalNominalSpan = nomMax - nomMin;
+    
+    const minDistancePercent = Math.min(distToMax, distToMin) / (totalNominalSpan / 2);
+    const closeness = 1 - minDistancePercent;
+    
+    riskScore = closeness * 70;
+    
+    if (trend === 'UPWARD' && distToMax < distToMin) {
+      riskScore += 20;
+    } else if (trend === 'DOWNWARD' && distToMin < distToMax) {
+      riskScore += 20;
+    }
+    
+    riskScore = Math.min(95, Math.max(0, riskScore));
+  }
+
+  let risk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' = 'LOW';
+  if (riskScore >= 80) {
+    risk = 'CRITICAL';
+  } else if (riskScore >= 50) {
+    risk = 'HIGH';
+  } else if (riskScore >= 25) {
+    risk = 'MODERATE';
+  }
+
+  return {
+    sma,
+    trend,
+    risk,
+    riskScore: Math.round(riskScore),
+    delta,
+  };
 }
 
 export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
@@ -116,6 +179,134 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
           <span>Click any hotspot node on the MSD Canvas to inspect metrics.</span>
         </div>
       )}
+ 
+      {/* Predictive Stability Forecast Indicator */}
+      <div className="bg-[#101216] p-3 rounded border border-purple-500/30 flex flex-col gap-2 relative">
+        <div className="flex items-center justify-between pb-1.5 border-b border-[#2f3749]">
+          <div className="flex items-center gap-1.5 font-antonio font-bold text-xs uppercase text-purple-400 tracking-wider">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>STABILITY FORECAST MATRIX</span>
+          </div>
+          <span className="font-mono-data text-[9px] text-purple-400 font-bold bg-purple-950/40 px-1.5 py-0.5 rounded border border-purple-800">
+            PREDICTIVE
+          </span>
+        </div>
+
+        {selectedMetric ? (() => {
+          const forecast = calculateStabilityForecast(selectedMetric);
+          return (
+            <div className="space-y-2 font-mono-data text-xs animate-fade-in">
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-slate-400">INSPECTED VECTOR:</span>
+                <span className="text-cyan-300 font-bold uppercase truncate max-w-[120px]">{selectedMetric.label}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">SMA (MOVING AVG):</span>
+                <span className="text-slate-200 font-bold">{forecast.sma.toFixed(2)} {selectedMetric.unit}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">TREND VECTOR:</span>
+                <span className={`font-bold flex items-center gap-1 ${
+                  forecast.trend === 'UPWARD' ? 'text-amber-400' : forecast.trend === 'DOWNWARD' ? 'text-blue-400' : 'text-emerald-400'
+                }`}>
+                  {forecast.trend === 'UPWARD' ? <TrendingUp className="w-3 h-3" /> : forecast.trend === 'DOWNWARD' ? <TrendingDown className="w-3 h-3" /> : null}
+                  {forecast.trend}
+                </span>
+              </div>
+              <div className="space-y-1 pt-1.5 border-t border-[#2f3749]/60">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-slate-400">ANOMALY TRIGGER RISK:</span>
+                  <span className={`font-bold ${
+                    forecast.risk === 'CRITICAL' ? 'text-red-500 animate-pulse' : forecast.risk === 'HIGH' ? 'text-orange-400' : forecast.risk === 'MODERATE' ? 'text-amber-400' : 'text-emerald-400'
+                  }`}>
+                    {forecast.risk} ({forecast.riskScore}%)
+                  </span>
+                </div>
+                <div className="w-full bg-[#050608] h-1.5 rounded-full overflow-hidden border border-[#2f3749]">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      forecast.risk === 'CRITICAL' ? 'bg-red-500' : forecast.risk === 'HIGH' ? 'bg-orange-400' : forecast.risk === 'MODERATE' ? 'bg-amber-400' : 'bg-emerald-400'
+                    }`}
+                    style={{ width: `${forecast.riskScore}%` }}
+                  />
+                </div>
+              </div>
+              {forecast.riskScore >= 50 && (
+                <div className="mt-1 p-1.5 bg-red-950/20 border border-red-500/30 rounded text-[10px] text-red-300 flex items-start gap-1 leading-normal">
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <span>PRE-ANOMALY DRIFT: Moving average approaching critical boundary. Calibration recommended.</span>
+                </div>
+              )}
+            </div>
+          );
+        })() : (() => {
+          const allMetrics = Object.values(metrics) as SystemMetric[];
+          let maxRiskScore = 0;
+          let mostAtRiskMetric: SystemMetric | null = null;
+          
+          allMetrics.forEach(m => {
+            const forecast = calculateStabilityForecast(m);
+            if (forecast.riskScore > maxRiskScore) {
+              maxRiskScore = forecast.riskScore;
+              mostAtRiskMetric = m;
+            }
+          });
+
+          const maxRisk = maxRiskScore >= 80 ? 'CRITICAL' : maxRiskScore >= 50 ? 'HIGH' : maxRiskScore >= 25 ? 'MODERATE' : 'LOW';
+
+          return (
+            <div className="space-y-2 font-mono-data text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">OVERALL RISK PROFILE:</span>
+                <span className={`font-bold ${
+                  maxRisk === 'CRITICAL' ? 'text-red-500 animate-pulse' : maxRisk === 'HIGH' ? 'text-orange-400' : maxRisk === 'MODERATE' ? 'text-amber-400' : 'text-emerald-400'
+                }`}>
+                  {maxRisk}
+                </span>
+              </div>
+              
+              <div className="w-full bg-[#050608] h-1.5 rounded-full overflow-hidden border border-[#2f3749]">
+                <div
+                  className={`h-full transition-all duration-500 ${
+                    maxRisk === 'CRITICAL' ? 'bg-red-500' : maxRisk === 'HIGH' ? 'bg-orange-400' : maxRisk === 'MODERATE' ? 'bg-amber-400' : 'bg-emerald-400'
+                  }`}
+                  style={{ width: `${Math.max(5, maxRiskScore)}%` }}
+                />
+              </div>
+
+              {mostAtRiskMetric ? (() => {
+                const metricName = (mostAtRiskMetric as SystemMetric).label;
+                const mKey = (mostAtRiskMetric as SystemMetric).key;
+                const f = calculateStabilityForecast(mostAtRiskMetric as SystemMetric);
+                return (
+                  <div className="pt-1 border-t border-[#2f3749]/60 text-[10px] space-y-1">
+                    <div className="text-slate-400 uppercase tracking-tighter">PRIMARY VECTOR OF DRIFT:</div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-300 font-bold truncate max-w-[130px]">{metricName}</span>
+                      <span className={`font-bold flex items-center gap-0.5 ${
+                        f.trend === 'UPWARD' ? 'text-amber-400' : f.trend === 'DOWNWARD' ? 'text-blue-400' : 'text-emerald-400'
+                      }`}>
+                        {f.trend === 'UPWARD' ? <TrendingUp className="w-3 h-3" /> : f.trend === 'DOWNWARD' ? <TrendingDown className="w-3 h-3" /> : null}
+                        {f.trend}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>SMA VS ACTUAL:</span>
+                      <span>{f.sma.toFixed(1)} vs {(mostAtRiskMetric as SystemMetric).value.toFixed(1)}</span>
+                    </div>
+                    {maxRiskScore >= 50 && (
+                      <div className="p-1 bg-amber-950/30 border border-amber-600/30 rounded text-[9px] text-amber-300 mt-1 flex items-start gap-1">
+                        <AlertCircle className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
+                        <span>High drift in vector {mKey}. Correct override is advised before trigger thresholds breach.</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : null}
+            </div>
+          );
+        })()}
+      </div>
 
       {/* Live System Metrics List */}
       <div className="flex flex-col gap-2 overflow-y-auto max-h-[380px] pr-1">

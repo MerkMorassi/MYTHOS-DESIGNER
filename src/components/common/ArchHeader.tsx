@@ -45,6 +45,9 @@ export const ArchHeader: React.FC<ArchHeaderProps> = ({
   const [isEditorExpanded, setIsEditorExpanded] = useState<boolean>(true);
   const [localSystemTime, setLocalSystemTime] = useState<string>('');
   const [localSystemDate, setLocalSystemDate] = useState<string>('');
+  const [tzMode, setTzMode] = useState<'MST' | 'LOCAL' | 'UTC'>(() => {
+    return (localStorage.getItem('voxcon-tz-mode') as 'MST' | 'LOCAL' | 'UTC') || 'MST';
+  });
   const [, setThemesVersion] = useState<number>(0);
   const theme = THEMES[currentTheme] || THEMES['noir-dark'];
 
@@ -61,28 +64,89 @@ export const ArchHeader: React.FC<ArchHeaderProps> = ({
     };
   }, []);
 
+  // Listen to timezone updates across components
+  useEffect(() => {
+    const handleTzUpdate = () => {
+      setTzMode((localStorage.getItem('voxcon-tz-mode') as 'MST' | 'LOCAL' | 'UTC') || 'MST');
+    };
+    window.addEventListener('voxcon_tz_updated', handleTzUpdate);
+    return () => window.removeEventListener('voxcon_tz_updated', handleTzUpdate);
+  }, []);
+
+  const cycleTzMode = () => {
+    const nextModeMap: Record<'MST' | 'LOCAL' | 'UTC', 'MST' | 'LOCAL' | 'UTC'> = {
+      MST: 'LOCAL',
+      LOCAL: 'UTC',
+      UTC: 'MST',
+    };
+    const nextMode = nextModeMap[tzMode];
+    localStorage.setItem('voxcon-tz-mode', nextMode);
+    setTzMode(nextMode);
+    window.dispatchEvent(new Event('voxcon_tz_updated'));
+    soundEngine.playBeep(660, 'sine', 0.05);
+  };
+
   // Update local system time and date dynamically
   useEffect(() => {
     const updateTimes = () => {
       const now = new Date();
-      const timeStr = now.toLocaleTimeString([], {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-      setLocalSystemTime(`${timeStr} LOCAL`);
+      let timeStr = '';
+      let dateStr = '';
 
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      setLocalSystemDate(`${year}-${month}-${day}`);
+      if (tzMode === 'MST') {
+        timeStr = now.toLocaleTimeString([], {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZone: 'America/Phoenix',
+        }) + ' MST';
+
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Phoenix',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        dateStr = formatter.format(now);
+      } else if (tzMode === 'UTC') {
+        timeStr = now.toLocaleTimeString([], {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZone: 'UTC',
+        }) + ' UTC';
+
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'UTC',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        dateStr = formatter.format(now);
+      } else {
+        timeStr = now.toLocaleTimeString([], {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }) + ' LOCAL';
+
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        dateStr = `${year}-${month}-${day}`;
+      }
+
+      setLocalSystemTime(timeStr);
+      setLocalSystemDate(dateStr);
     };
 
     updateTimes();
     const interval = setInterval(updateTimes, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [tzMode]);
 
   const toggleAudio = () => {
     soundEngine.enabled = !audioEnabled;
@@ -102,9 +166,13 @@ export const ArchHeader: React.FC<ArchHeaderProps> = ({
             <span className="font-bold tracking-wider">{headerData.authorizationCode}</span>
           </div>
           <span className="text-[#2f3749]">|</span>
-          <div className="hidden sm:flex items-center gap-2 font-mono-data text-slate-400">
-            <span>SYS-TIME:</span>
-            <span className="text-yellow-400 font-bold">{localSystemTime}</span>
+          <div 
+            onClick={cycleTzMode}
+            className="hidden sm:flex items-center gap-2 font-mono-data text-slate-400 cursor-pointer hover:bg-slate-800/45 px-2 py-0.5 rounded border border-transparent hover:border-slate-700/60 transition-all select-none group"
+            title="Click to cycle timezone (MST / Local / UTC)"
+          >
+            <span className="group-hover:text-slate-200">SYS-TIME:</span>
+            <span className="text-yellow-400 font-bold group-hover:text-yellow-300 transition-colors">{localSystemTime}</span>
           </div>
           <span className="hidden md:inline text-[#2f3749]">|</span>
           <div className="hidden md:flex items-center gap-2 font-mono-data text-slate-400">

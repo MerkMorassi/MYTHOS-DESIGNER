@@ -19,27 +19,91 @@ export const BottomRunner: React.FC<BottomRunnerProps> = ({
   const theme = THEMES[currentTheme];
   const [timestamp, setTimestamp] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
+  const [tzMode, setTzMode] = useState<'MST' | 'LOCAL' | 'UTC'>(() => {
+    return (localStorage.getItem('voxcon-tz-mode') as 'MST' | 'LOCAL' | 'UTC') || 'MST';
+  });
+
+  // Listen to timezone updates across components
+  useEffect(() => {
+    const handleTzUpdate = () => {
+      setTzMode((localStorage.getItem('voxcon-tz-mode') as 'MST' | 'LOCAL' | 'UTC') || 'MST');
+    };
+    window.addEventListener('voxcon_tz_updated', handleTzUpdate);
+    return () => window.removeEventListener('voxcon_tz_updated', handleTzUpdate);
+  }, []);
+
+  const cycleTzMode = () => {
+    const nextModeMap: Record<'MST' | 'LOCAL' | 'UTC', 'MST' | 'LOCAL' | 'UTC'> = {
+      MST: 'LOCAL',
+      LOCAL: 'UTC',
+      UTC: 'MST',
+    };
+    const nextMode = nextModeMap[tzMode];
+    localStorage.setItem('voxcon-tz-mode', nextMode);
+    setTzMode(nextMode);
+    window.dispatchEvent(new Event('voxcon_tz_updated'));
+    soundEngine.playBeep(660, 'sine', 0.05);
+  };
 
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const timeStr = now.toLocaleTimeString([], {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-      setTimestamp(`${timeStr} LOCAL`);
+      let timeStr = '';
+      let dateStr = '';
 
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      setCurrentDate(`${year}-${month}-${day}`);
+      if (tzMode === 'MST') {
+        timeStr = now.toLocaleTimeString([], {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZone: 'America/Phoenix',
+        }) + ' MST';
+
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Phoenix',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        dateStr = formatter.format(now);
+      } else if (tzMode === 'UTC') {
+        timeStr = now.toLocaleTimeString([], {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZone: 'UTC',
+        }) + ' UTC';
+
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'UTC',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        dateStr = formatter.format(now);
+      } else {
+        timeStr = now.toLocaleTimeString([], {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }) + ' LOCAL';
+
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        dateStr = `${year}-${month}-${day}`;
+      }
+
+      setTimestamp(timeStr);
+      setCurrentDate(dateStr);
     };
     updateTime();
     const timer = setInterval(updateTime, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [tzMode]);
 
   const handleRefresh = () => {
     soundEngine.playChime();
@@ -83,9 +147,13 @@ export const BottomRunner: React.FC<BottomRunnerProps> = ({
             <span className="text-yellow-400 font-bold">{currentDate || stardate}</span>
           </div>
 
-          <div className="hidden md:inline text-slate-400">
-            <span>SYS-TIME:</span>
-            <span className="text-slate-300 ml-1 font-bold">{timestamp}</span>
+          <div 
+            onClick={cycleTzMode}
+            className="hidden md:flex items-center gap-1.5 text-slate-400 cursor-pointer hover:bg-slate-800/45 px-2 py-0.5 rounded border border-transparent hover:border-slate-700/60 transition-all select-none group"
+            title="Click to cycle timezone (MST / Local / UTC)"
+          >
+            <span className="group-hover:text-slate-200">SYS-TIME:</span>
+            <span className="text-slate-300 ml-1 font-bold group-hover:text-yellow-400 transition-colors">{timestamp}</span>
           </div>
 
           <button

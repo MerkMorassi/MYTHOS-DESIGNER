@@ -57,7 +57,8 @@ class WindowsVoiceEngine {
       };
     }
 
-    const lowerHint = (personaHint || '').toLowerCase();
+    const safeHint = typeof personaHint === 'string' ? personaHint : '';
+    const lowerHint = safeHint.toLowerCase();
     const isFemalePreferred = lowerHint === 'kore';
 
     // 1. Check for Microsoft Natural / Online Read Aloud voices
@@ -147,6 +148,7 @@ class WindowsVoiceEngine {
     phrase: string,
     options: {
       personaHint?: string;
+      specificVoiceName?: string;
       rate?: number;
       pitch?: number;
       onStart?: () => void;
@@ -167,10 +169,22 @@ class WindowsVoiceEngine {
       if (!cleanText) return false;
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
-      const match = this.getBestWindowsVoice(options.personaHint);
+      let selectedVoiceObj: SpeechSynthesisVoice | null = null;
 
-      if (match.voice) {
-        utterance.voice = match.voice;
+      if (options.specificVoiceName) {
+        const found = this.voices.find((v) => v.name === options.specificVoiceName);
+        if (found) {
+          selectedVoiceObj = found;
+        }
+      }
+
+      if (!selectedVoiceObj) {
+        const match = this.getBestWindowsVoice(options.personaHint);
+        selectedVoiceObj = match.voice;
+      }
+
+      if (selectedVoiceObj) {
+        utterance.voice = selectedVoiceObj;
       }
 
       utterance.rate = options.rate ?? 1.02;
@@ -199,10 +213,34 @@ class WindowsVoiceEngine {
     }
   }
 
+  public getAvailableVoices(): SpeechSynthesisVoice[] {
+    return this.refreshVoices();
+  }
+
+  public onVoicesUpdated(callback: (voices: SpeechSynthesisVoice[]) => void): () => void {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return () => {};
+    }
+    const handler = () => {
+      callback(this.refreshVoices());
+    };
+    window.speechSynthesis.addEventListener('voiceschanged', handler);
+    return () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', handler);
+    };
+  }
+
   public cancel(): void {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
+  }
+
+  public isSpeaking(): boolean {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return false;
+    }
+    return window.speechSynthesis.speaking;
   }
 
   public isAvailable(): boolean {

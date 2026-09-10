@@ -22,7 +22,6 @@ function applyTacticalHighlight(el: HTMLElement) {
     const originalTransition = el.style.transition;
     el.style.transition = 'all 0.2s ease-in-out';
     el.classList.add(...TACTICAL_VOICE_PULSE_CLASS.split(' '));
-    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     setTimeout(() => {
       try {

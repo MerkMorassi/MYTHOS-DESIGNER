@@ -257,7 +257,7 @@ async function startServer() {
   ): Promise<{ response: any; modelUsed: string }> {
     const candidateModels = [
       options.primaryModel || "gemini-3.8-flash",
-      ...(options.fallbackModels || ["gemini-flash-latest", "gemini-3.1-flash-lite"]),
+      ...(options.fallbackModels || ["gemini-3.1-flash-lite", "gemini-flash-latest"]),
     ];
     const uniqueModels = Array.from(new Set(candidateModels));
 
@@ -283,10 +283,11 @@ async function startServer() {
             errMsg.includes("RESOURCE_EXHAUSTED");
 
           if (isTemporary && attempt === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
+            const delay = 600 + Math.floor(Math.random() * 400);
+            await new Promise((resolve) => setTimeout(resolve, delay));
             continue;
           }
-          console.warn(`[Gemini Fallback] Model '${model}' unavailable (${errMsg.slice(0, 100)}...). Trying next candidate model.`);
+          console.log(`[Gemini Pipeline] Model '${model}' experienced capacity limit or latency. Dispatching to fallback candidate.`);
           break;
         }
       }
@@ -570,13 +571,13 @@ NODES BOUND: ${manifest?.msdCanvas?.nodes?.length || 0}`;
         });
 
         return res.json({ analysis: response.text, modelUsed, source: "gemini_api" });
-      } catch (geminiError: unknown) {
-        console.warn("[Gemini Fallback Activated] Gemini API returned temporary demand spike (503) or error. Synthesizing local tactical diagnostic.", geminiError);
+      } catch (_geminiError: unknown) {
+        console.log("[Gemini Pipeline] Cloud API capacity limit reached. Synthesizing local tactical diagnostic matrix.");
         const localDiagnostic = synthesizeLocalTelemetryDiagnostic(metrics, manifest, prompt);
         return res.json({
           analysis: localDiagnostic,
           source: "local_telemetry_matrix_fallback",
-          notice: "Gemini model is currently experiencing temporary high demand (503). Local tactical telemetry matrix synthesized this diagnostic.",
+          notice: "Gemini cloud capacity limit encountered. Local tactical telemetry matrix synthesized this diagnostic.",
         });
       }
     } catch (error: unknown) {
@@ -747,6 +748,88 @@ NODES BOUND: ${manifest?.msdCanvas?.nodes?.length || 0}`;
     }
   });
 
+  // Gemini Prebuilt Voices Registry with Acoustic & Operational Metadata
+  const ALL_GEMINI_VOICES = [
+    { name: "Zephyr", gender: "Female / Bright", tone: "Smooth / Crisp", category: "Tactical Ops", default: true, description: "Default vocal persona. Clear, disciplined naval command cadence." },
+    { name: "Charon", gender: "Male / Deep", tone: "Tactical / Command", category: "Command Protocol", description: "Authoritative, disciplined DoD tactical and military command protocol." },
+    { name: "Kore", gender: "Female / Firm", tone: "Articulate / Advisory", category: "Diagnostics", description: "High-confidence technical diagnostics, analytical decomposition." },
+    { name: "Fenrir", gender: "Male / Resonant", tone: "Deep / Combat", category: "Tactical Intercept", description: "Urgent combat telemetry, rapid response, critical alarms." },
+    { name: "Puck", gender: "Male / Lively", tone: "Upbeat / Dynamic", category: "Sensor Streams", description: "Continuous subsystem sensor telemetry, live data stream monitoring." },
+    { name: "Aoede", gender: "Female / Melodic", tone: "Breezy / Conversational", category: "Extended Narration", description: "Balanced acoustic profile, extended briefing and status readouts." },
+    { name: "Enceladus", gender: "Male / Energetic", tone: "Expressive / Alert", category: "Hazard Alerts", description: "High-urgency anomaly detection and tactical hazard notifications." },
+    { name: "Leda", gender: "Female / Serene", tone: "Calm / Composed", category: "Command Bridge", description: "Steady cadence for bridge crew coordination and long-range relay." },
+    { name: "Orpheus", gender: "Male / Resonant", tone: "Assured / Deep", category: "Strategic Briefings", description: "Deep harmonic clarity, strategic fleet status briefings." },
+    { name: "Despina", gender: "Female / Smooth", tone: "Measured / Warm", category: "Crew Operations", description: "Even cadence for life-support and interior deck management." },
+    { name: "Erinome", gender: "Female / Expressive", tone: "Precise / Articulate", category: "Engineering Array", description: "Microsecond precision for reactor timing and frequency arrays." },
+    { name: "Laomedeia", gender: "Female / Fast", tone: "Rhythmic / Crisp", category: "Rapid Telemetry", description: "High-speed protocol verification and buffer status relay." },
+    { name: "Sulafat", gender: "Neutral / Focused", tone: "Compact / Direct", category: "Tactical Weapons", description: "Short-burst targeting directives and defensive shield updates." },
+    { name: "Alnilam", gender: "Male / Authoritative", tone: "Balanced / Steady", category: "Astrogation", description: "Central starpath plotting and warp navigation telemetry." },
+    { name: "Achernar", gender: "Neutral / Direct", tone: "Modern / Tactical", category: "Surveillance", description: "Passive sensor array scanning and perimeter radar sweeps." },
+    { name: "Gacrux", gender: "Male / Low", tone: "Deep / Grounded", category: "Heavy Systems", description: "Sub-harmonic core telemetry and thermal heat sink monitoring." },
+    { name: "Iapetus", gender: "Male / Steely", tone: "Disciplined / Military", category: "Security Protocol", description: "Strict access control and perimeter firewall diagnostics." },
+    { name: "Schedar", gender: "Female / Sharp", tone: "Technical / Piercing", category: "Avionics", description: "Attitude control thrusters and flight surface telemetry." },
+    { name: "Umbriel", gender: "Male / Subdued", tone: "Stealth / Mellow", category: "Silent Running", description: "Low-observable acoustic profile for emissions-controlled ops." },
+    { name: "Callirrhoe", gender: "Female / Melodic", tone: "Analytical / Smooth", category: "Deep Space", description: "Long-range sensor sweeps and deep telemetry acquisition." },
+    { name: "Autonoe", gender: "Female / Vigilant", tone: "Alert / Decisive", category: "Early Warning", description: "Proximity alert verification and hostile vector calculation." },
+    { name: "Algenib", gender: "Male / Decisive", tone: "Commanding / Direct", category: "Fleet Relay", description: "Inter-ship communications and fleet coordination orders." },
+    { name: "Achird", gender: "Neutral / Clear", tone: "Scientific / Metric", category: "Physics Array", description: "Particle resonance metrics and quantum flux calculation." },
+    { name: "Rasalgethi", gender: "Male / Resonant", tone: "Stellar / Grand", category: "Astrography", description: "Deep sector mapping and gravitational wave analysis." },
+    { name: "Vindemiatrix", gender: "Female / Precise", tone: "Metric / Analytical", category: "Quantum Matrix", description: "Mathematical extrapolation and lattice coherence." }
+  ];
+
+  const MODEL_PERSONA_PROFILES = [
+    {
+      id: "Charon",
+      name: "Charon (Tactical / Command)",
+      defaultTemp: 0.2,
+      description: "DoD 5110.04-M BLUF protocol, active voice, 20-word maximum sentences, authoritative military command discipline."
+    },
+    {
+      id: "Kore",
+      name: "Kore (Advisory / Diagnostics)",
+      defaultTemp: 0.35,
+      description: "Detailed systems diagnostics, analytical root-cause decomposition, articulate status reports."
+    },
+    {
+      id: "Fenrir",
+      name: "Fenrir (Combat / Intercept)",
+      defaultTemp: 0.1,
+      description: "High-priority threat vector reporting, minimal response latency, combat alert cadence."
+    },
+    {
+      id: "Puck",
+      name: "Puck (Sensor / Telemetry)",
+      defaultTemp: 0.5,
+      description: "Continuous subsystem telemetry streaming, live sensor feeds, dynamic data reporting."
+    },
+    {
+      id: "Zephyr",
+      name: "Zephyr (Strategic / Naval Operations)",
+      defaultTemp: 0.2,
+      description: "Fleet operations standard, strategic logistics, disciplined COMMPACK-MIL protocol."
+    },
+    {
+      id: "Custom",
+      name: "Custom (Operator Tuning)",
+      defaultTemp: 0.2,
+      description: "User-defined temperature, cadence, pitch, and operational directives."
+    }
+  ];
+
+  // Dynamic Gemini Voices Query Endpoint
+  app.get("/api/gemini-voices", (req, res) => {
+    res.json({
+      success: true,
+      voices: ALL_GEMINI_VOICES,
+      personas: MODEL_PERSONA_PROFILES,
+      defaultVoice: "Zephyr",
+      defaultPersona: "Charon",
+      defaultTemperature: 0.2,
+      totalVoices: ALL_GEMINI_VOICES.length,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // Host Environment Diagnostic Endpoint
   app.get("/api/host/status", async (req, res) => {
     exec("python3 --version || python --version", (pyErr, pyStdout) => {
@@ -792,10 +875,16 @@ NODES BOUND: ${manifest?.msdCanvas?.nodes?.length || 0}`;
   // Handle WebSocket connection for Gemini Live API
   wss.on("connection", async (clientWs: WebSocket, request: http.IncomingMessage) => {
     const url = new URL(request?.url || "", `http://${request?.headers?.host || "localhost"}`);
-    const requestedVoice = url.searchParams.get("voice") || "Charon";
-    const allowedVoices = ["Charon", "Kore", "Fenrir", "Puck", "Zephyr"];
-    const voiceName = allowedVoices.includes(requestedVoice) ? requestedVoice : "Charon";
-    console.log(`[LiveWS] Client connected to Voice Control socket with voice: ${voiceName}`);
+    const requestedVoice = url.searchParams.get("voice") || "Zephyr";
+    const requestedPersona = url.searchParams.get("persona") || "Charon";
+    const parsedTemp = parseFloat(url.searchParams.get("temperature") || "0.2");
+    const safeTemperature = isNaN(parsedTemp) ? 0.2 : Math.min(Math.max(parsedTemp, 0.0), 1.0);
+
+    const allowedVoices = ALL_GEMINI_VOICES.map((v) => v.name);
+    const voiceName = allowedVoices.includes(requestedVoice) ? requestedVoice : "Zephyr";
+    const personaProfile = MODEL_PERSONA_PROFILES.find((p) => p.id === requestedPersona) || MODEL_PERSONA_PROFILES[0];
+
+    console.log(`[LiveWS] Client connected to Voice Control socket: Voice=${voiceName}, Persona=${personaProfile.name}, Temp=${safeTemperature}`);
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -819,19 +908,26 @@ NODES BOUND: ${manifest?.msdCanvas?.nodes?.length || 0}`;
       });
 
       const session = await ai.live.connect({
+        // Model Audit: 'gemini-3.1-flash-live-preview' is the authoritative model for Multimodal Live API 
+        // as per system integration guidelines (gemini_interactions_api skill). 
+        // Optimized for real-time audio/video conversation and tool-calling latency.
         model: "gemini-3.1-flash-live-preview",
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName } },
           },
+          generationConfig: {
+            temperature: safeTemperature,
+          },
           systemInstruction: `You are the attendant VOXCON Agent and Tactical Execution AI for the Master Systems Display (MSD) console.
 You take voice input and natural language orders from the operator and execute them immediately using your tools.
-Your active vocal persona is ${voiceName}.
-When the voice uplink becomes active or when initialized, your first transmission must immediately state: "VOXCON Active. Standing by."
+Model Parameters Configuration: ${personaProfile.name} (Temperature: ${safeTemperature}) - ${personaProfile.description}.
+Active vocal persona: ${voiceName} (Default: Zephyr).
+When the voice uplink becomes active or when initialized, your first action must be to call dispatchTacticalAudio(responseId: "voxcon_active_standby").
 You must adhere strictly to Department of Defense (DoD) & U.S. Navy Operational Communication Standards:
 1. BLUF: Begin your acknowledgment with a Bottom Line Up Front statement of the action taken in the first sentence.
-2. Active Voice: Speak in the active voice.
+2. Active Voice: Speak in the active voice. Name the actor taking the action.
 3. Helping Verbs:
    - Use "must" for mandatory directives.
    - Use "will" for projected system trajectory or scheduled state transitions.
@@ -843,17 +939,48 @@ You must adhere strictly to Department of Defense (DoD) & U.S. Navy Operational 
    - Prohibit bureaucratic action filler ("conducts", "performs", "prepares to"). State the direct operational action ("switches", "purges", "recalibrates").
 6. Prohibit Redundancies: Prohibit "currently", "presently", "close proximity", and vague words like "here".
 7. Prohibit Conversational Filler: Prohibit pleasantries, apologies, and casual chit-chat.
-When an operator gives an order (e.g. switch view mode, change theme, change voice persona, induce or reset anomaly surge, select schematic, select node, or recalibrate telemetry):
+When an operator gives an order (e.g. switch view mode, change theme, change voice persona, switch dashboard tab, induce or reset anomaly surge, select schematic, select node, click element, adjust control, or recalibrate telemetry):
 1. ALWAYS CALL the corresponding tool to execute the order.
-2. Acknowledge the execution concisely in a calm, professional tactical tone (1-2 short sentences).
+2. For standard acknowledgments, call dispatchTacticalAudio(responseId: "order_received_standby") or another appropriate stored response to save tokens.
+3. If an order is invalid, unauthorized, or cannot be executed, call dispatchTacticalAudio(responseId: "negative") and state the reason concisely.
 Available modes: 'msd-view', 'ui-builder', 'token-inspector', 'ai-diagnostics', 'voice-control'.
 Available themes: 'noir-dark', 'quantum-cyan', 'aegis-amber', 'hyperion-blue', 'obsidian-void'.
 Available schematics: 'quantum_core', 'bridge_command', 'neural_lattice', 'thermo_array'.
-Available voices: 'Charon', 'Kore', 'Fenrir', 'Puck', 'Zephyr'.
+Available voices: ${allowedVoices.join(', ')}.
+Default configuration: NOIR MONOCHROMATIC ('noir-dark') > MSD DISPLAY ('msd-view') > EXTRAPOLATED DASHBOARD ('dashboard'). Default Voice: Zephyr, operating under Charon Model Parameters (Tactical/Command).
 Execute orders decisively without unnecessary disclaimers.`,
           tools: [
             {
               functionDeclarations: [
+                {
+                  name: "dispatchTacticalAudio",
+                  description: "Play a pre-recorded standard tactical response instead of generating a new vocal response. Use this to save tokens for standard acknowledgments.",
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      responseId: {
+                        type: Type.STRING,
+                        description: "The response key: 'voxcon_active_standby' | 'order_received_standby' | 'recalibration_complete' | 'anomaly_detected' | 'mic_live' | 'negative'",
+                      },
+                    },
+                    required: ["responseId"],
+                  },
+                },
+                {
+                  name: "updateVoxconLayout",
+                  description: "Reorders the GUI components in the VOXCON module. This allows moving elements like the parameter matrix above or below other elements.",
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      newLayout: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "The complete list of component IDs in the desired order. Available IDs: 'parameter-matrix', 'uplink-bar', 'error-display', 'main-grid', 'host-control'.",
+                      },
+                    },
+                    required: ["newLayout"],
+                  },
+                },
                 {
                   name: "changeVoice",
                   description: "Switch the AI synthesis voice persona.",
@@ -862,7 +989,7 @@ Execute orders decisively without unnecessary disclaimers.`,
                     properties: {
                       voiceName: {
                         type: Type.STRING,
-                        description: "Voice persona: 'Charon' | 'Kore' | 'Fenrir' | 'Puck' | 'Zephyr'",
+                        description: "Voice persona: Any valid Gemini prebuilt voice name (e.g. Zephyr, Charon, Kore, Fenrir, Puck, Aoede, Enceladus, Leda, Orpheus, etc.)",
                       },
                     },
                     required: ["voiceName"],
@@ -983,6 +1110,56 @@ Execute orders decisively without unnecessary disclaimers.`,
                   },
                 },
                 {
+                  name: "switchDashboardTab",
+                  description: "Switch the view tab within the Master Systems Display (e.g. 'dashboard' for extrapolated dashboard, 'schematic' for schematic canvas, 'split' for split view).",
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      targetTab: {
+                        type: Type.STRING,
+                        description: "'dashboard' | 'schematic' | 'split'",
+                      },
+                    },
+                    required: ["targetTab"],
+                  },
+                },
+                {
+                  name: "clickElement",
+                  description: "Click a button, toggle, or UI element by voice target label or id.",
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      targetName: {
+                        type: Type.STRING,
+                        description: "Name, text label, or id of the button or control to click.",
+                      },
+                    },
+                    required: ["targetName"],
+                  },
+                },
+                {
+                  name: "adjustControl",
+                  description: "Adjust or set a slider, metric, or numeric control by name.",
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      controlName: {
+                        type: Type.STRING,
+                        description: "Name of the control or slider.",
+                      },
+                      action: {
+                        type: Type.STRING,
+                        description: "'increment' | 'decrement' | 'set' | 'toggle'",
+                      },
+                      value: {
+                        type: Type.NUMBER,
+                        description: "Target value if setting directly.",
+                      },
+                    },
+                    required: ["controlName", "action"],
+                  },
+                },
+                {
                   name: "queryNetworkNode",
                   description: "Query a local network service, port, or cluster node in a Python/LAN environment.",
                   parameters: {
@@ -1030,6 +1207,21 @@ Execute orders decisively without unnecessary disclaimers.`,
                   const node = String((call.args as any)?.nodeAddress || "");
                   callResponse = {
                     status: `Network node query sent to ${node}.`,
+                  };
+                } else if (call.name === "switchDashboardTab") {
+                  const tab = String((call.args as any)?.targetTab || "dashboard");
+                  callResponse = {
+                    status: `Dashboard view switched to ${tab}.`,
+                  };
+                } else if (call.name === "clickElement") {
+                  const target = String((call.args as any)?.targetName || "");
+                  callResponse = {
+                    status: `Control element dispatched click: ${target}.`,
+                  };
+                } else if (call.name === "adjustControl") {
+                  const ctrl = String((call.args as any)?.controlName || "");
+                  callResponse = {
+                    status: `Control adjusted: ${ctrl}.`,
                   };
                 }
 
@@ -1100,7 +1292,7 @@ Execute orders decisively without unnecessary disclaimers.`,
       setTimeout(() => {
         try {
           session.sendRealtimeInput({
-            text: "Uplink connected. Immediately vocalize this exact greeting to the operator: 'VOXCON Active. Standing by.'",
+            text: "Uplink connected. Immediately vocalize this exact greeting to the operator: 'VOXCON Active. This is the VOXCON Tactical Execution AI. Standing by to receive your orders, operator.'",
           });
         } catch (greetErr) {
           console.warn("[LiveWS] Failed to dispatch activation greeting trigger:", greetErr);
@@ -1111,6 +1303,41 @@ Execute orders decisively without unnecessary disclaimers.`,
       clientWs.on("message", (raw) => {
         try {
           const data = JSON.parse(raw.toString());
+          
+          // Support for Gemini RealtimeInput structure
+          if (data.realtimeInput) {
+            // 1. Handle raw mediaChunks (often sent by direct-to-gemini client implementations)
+            if (Array.isArray(data.realtimeInput.mediaChunks)) {
+              for (const chunk of data.realtimeInput.mediaChunks) {
+                if (chunk.data) {
+                  session.sendRealtimeInput({
+                    audio: {
+                      data: chunk.data,
+                      mimeType: chunk.mimeType || "audio/pcm;rate=16000",
+                    },
+                  });
+                }
+              }
+            }
+
+            // 2. Handle standard SDK fields (audio/text)
+            if (data.realtimeInput.audio) {
+              session.sendRealtimeInput({ audio: data.realtimeInput.audio });
+            }
+            if (data.realtimeInput.text) {
+              session.sendRealtimeInput({ text: data.realtimeInput.text });
+            }
+
+            // 3. Handle clearCurrentTurn (Tactical Walkie-Talkie Protocol "break-in")
+            if (data.realtimeInput.clearCurrentTurn) {
+              // Standard SDK doesn't always expose clearCurrentTurn directly in sendRealtimeInput types,
+              // but we can pass it through if supported or handle it via session state.
+              // For gemini-3.1-flash-live-preview, we attempt to pass it through.
+              session.sendRealtimeInput({ clearCurrentTurn: true } as any);
+            }
+            return;
+          }
+
           if (data.type === "audio" && data.audio) {
             session.sendRealtimeInput({
               audio: {

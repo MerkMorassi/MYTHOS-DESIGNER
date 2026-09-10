@@ -109,6 +109,10 @@ export class LiveAudioPlayer {
     this.activeSources = [];
   }
 
+  public isPlaying(): boolean {
+    return this.activeSources.length > 0 && !!this.audioCtx && this.audioCtx.currentTime < this.nextStartTime;
+  }
+
   public close() {
     this.interrupt();
     if (this.audioCtx && this.audioCtx.state !== 'closed') {

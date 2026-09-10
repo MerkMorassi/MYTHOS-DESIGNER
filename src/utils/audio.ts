@@ -66,6 +66,55 @@ class LcarSoundEngine {
     this.playBeep(783.99, 'sine', 0.05, 0.05); // G5
   }
 
+  public playSquelch(type: 'open' | 'close' = 'open') {
+    if (!this.enabled) return;
+    try {
+      this.initCtx();
+      if (!this.ctx) return;
+
+      const bufferSize = this.ctx.sampleRate * (type === 'open' ? 0.08 : 0.12);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (type === 'open' ? 0.05 : 0.03);
+      }
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(type === 'open' ? 1200 : 800, this.ctx.currentTime);
+      filter.Q.setValueAtTime(1.5, this.ctx.currentTime);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + (type === 'open' ? 0.07 : 0.1));
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      noise.start();
+    } catch {
+      // Silent fail
+    }
+  }
+
+  public playNegative() {
+    if (!this.enabled) return;
+    // Two low, short warning tones
+    this.playBeep(220, 'square', 0.15, 0.05);
+    setTimeout(() => this.playBeep(220, 'square', 0.15, 0.05), 200);
+  }
+
+  public playRoger() {
+    if (!this.enabled) return;
+    // Single high, short confirmation tone
+    this.playBeep(880, 'sine', 0.08, 0.05);
+  }
+
   public isMuted(): boolean {
     return !this.enabled;
   }

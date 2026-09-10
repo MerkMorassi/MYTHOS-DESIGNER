@@ -334,7 +334,7 @@ export const TEMPLATE_PRESETS: Record<string, MSDLayoutManifest> = {
     $schema: 'https://mythos.engine/schemas/ui-builder-v1.json',
     layoutId: 'cloud-telemetry-dashboard',
     name: 'SaaS Cloud Telemetry & Observability Console',
-    theme: 'hyperion-blue',
+    theme: 'noir-dark',
     layoutArchetype: 'modern-dashboard',
     header: {
       title: 'CLOUD OBSERVER // PRODUCTION MESH',

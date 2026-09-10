@@ -25,15 +25,61 @@ import { VoiceControlModule } from './components/voice/VoiceControlModule';
 import { ThemeForgeModal } from './components/theme/ThemeForgeModal';
 import { soundEngine } from './utils/audio';
 import { useLiveVoiceControl } from './hooks/useLiveVoiceControl';
+import { executeVoiceDomClick, executeVoiceDomAdjust } from './utils/voiceDomController';
 
 export default function App() {
-  const [manifest, setManifest] = useState<MSDLayoutManifest>(
-    TEMPLATE_PRESETS.modernCloudDashboard || DEFAULT_LAYOUT_MANIFEST
-  );
-  const [currentTheme, setCurrentTheme] = useState<ThemeId>(
-    (TEMPLATE_PRESETS.modernCloudDashboard?.theme as ThemeId) || DEFAULT_LAYOUT_MANIFEST.theme
-  );
+  const [manifest, setManifest] = useState<MSDLayoutManifest>(() => {
+    const savedDefaultKey = localStorage.getItem('mythos_default_template_preset');
+    if (savedDefaultKey) {
+      if (savedDefaultKey.startsWith('custom-')) {
+        const themeId = savedDefaultKey.replace('custom-', '') as ThemeId;
+        if (THEMES[themeId]) {
+          return {
+            ...(TEMPLATE_PRESETS.modernCloudDashboard || DEFAULT_LAYOUT_MANIFEST),
+            theme: themeId,
+            name: `${THEMES[themeId].name} Synthesized Template`,
+          };
+        }
+      }
+      let preset = TEMPLATE_PRESETS[savedDefaultKey];
+      if (!preset) {
+        preset = Object.values(TEMPLATE_PRESETS).find(
+          (p) => p.layoutId === savedDefaultKey || p.name.toLowerCase() === savedDefaultKey.toLowerCase()
+        );
+      }
+      if (preset) {
+        return {
+          ...preset,
+          theme: preset.theme && THEMES[preset.theme as ThemeId] ? (preset.theme as ThemeId) : 'noir-dark',
+        };
+      }
+    }
+    return {
+      ...(TEMPLATE_PRESETS.modernCloudDashboard || DEFAULT_LAYOUT_MANIFEST),
+      theme: 'noir-dark',
+    };
+  });
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>(() => {
+    const savedDefaultKey = localStorage.getItem('mythos_default_template_preset');
+    if (savedDefaultKey) {
+      if (savedDefaultKey.startsWith('custom-')) {
+        const themeId = savedDefaultKey.replace('custom-', '') as ThemeId;
+        if (THEMES[themeId]) return themeId;
+      }
+      let preset = TEMPLATE_PRESETS[savedDefaultKey];
+      if (!preset) {
+        preset = Object.values(TEMPLATE_PRESETS).find(
+          (p) => p.layoutId === savedDefaultKey || p.name.toLowerCase() === savedDefaultKey.toLowerCase()
+        );
+      }
+      if (preset && preset.theme && THEMES[preset.theme as ThemeId]) {
+        return preset.theme as ThemeId;
+      }
+    }
+    return 'noir-dark';
+  });
   const [appMode, setAppMode] = useState<AppMode>('msd-view');
+  const [dashboardTab, setDashboardTab] = useState<'dashboard' | 'schematic' | 'split'>('dashboard');
   const [selectedNode, setSelectedNode] = useState<MSDNode | null>(null);
   const [anomalySimulated, setAnomalySimulated] = useState<boolean>(false);
   const [isThemeForgeOpen, setIsThemeForgeOpen] = useState<boolean>(false);
@@ -311,6 +357,16 @@ export default function App() {
       if (node) {
         setSelectedNode(node);
       }
+    } else if (name === 'setDefaultPreset' || name === 'setDefaultDashboardPreset') {
+      const templateKey = String(args.templateKey || args.presetKey || '');
+      if (templateKey) {
+        handleSelectTemplate(templateKey);
+        try {
+          localStorage.setItem('mythos_default_template_preset', templateKey);
+        } catch (e) {
+          console.warn(e);
+        }
+      }
     } else if (name === 'changeVoice') {
       const v = String(args.voiceName || '');
       if (['Charon', 'Kore', 'Fenrir', 'Puck', 'Zephyr'].includes(v)) {
@@ -366,6 +422,24 @@ export default function App() {
         console.log('[Host Execute Python Output]', data);
       } catch (err) {
         console.error('[App] Failed to execute Python script:', err);
+      }
+    } else if (name === 'switchDashboardTab') {
+      const targetTab = String(args.targetTab || 'dashboard') as 'dashboard' | 'schematic' | 'split';
+      if (['dashboard', 'schematic', 'split'].includes(targetTab)) {
+        setAppMode('msd-view');
+        setDashboardTab(targetTab);
+      }
+    } else if (name === 'clickElement') {
+      const target = String(args.targetName || '');
+      if (target) {
+        executeVoiceDomClick(target);
+      }
+    } else if (name === 'adjustControl') {
+      const control = String(args.controlName || '');
+      const action = (args.action as any) || 'set';
+      const val = typeof args.value === 'number' ? args.value : undefined;
+      if (control) {
+        executeVoiceDomAdjust(control, action, val);
       }
     } else if (name === 'queryNetworkNode') {
       const node = String(args.nodeAddress || '');
@@ -475,6 +549,8 @@ export default function App() {
                 anomalySimulated={anomalySimulated}
                 onUpdateMetric={handleUpdateMetric}
                 onClearCustomImage={handleClearCustomImage}
+                activeTab={dashboardTab}
+                onTabChange={setDashboardTab}
               />
             ) : (
               <div className="flex flex-col lg:flex-row gap-3 w-full">
