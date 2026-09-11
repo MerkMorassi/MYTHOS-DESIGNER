@@ -749,31 +749,21 @@ NODES BOUND: ${manifest?.msdCanvas?.nodes?.length || 0}`;
   });
 
   // Gemini Prebuilt Voices Registry with Acoustic & Operational Metadata
+  // Suppressed male voices; only female and neutral Gemini voices are permitted
   const ALL_GEMINI_VOICES = [
     { name: "Zephyr", gender: "Female / Bright", tone: "Smooth / Crisp", category: "Tactical Ops", default: true, description: "Default vocal persona. Clear, disciplined naval command cadence." },
-    { name: "Charon", gender: "Male / Deep", tone: "Tactical / Command", category: "Command Protocol", description: "Authoritative, disciplined DoD tactical and military command protocol." },
     { name: "Kore", gender: "Female / Firm", tone: "Articulate / Advisory", category: "Diagnostics", description: "High-confidence technical diagnostics, analytical decomposition." },
-    { name: "Fenrir", gender: "Male / Resonant", tone: "Deep / Combat", category: "Tactical Intercept", description: "Urgent combat telemetry, rapid response, critical alarms." },
-    { name: "Puck", gender: "Male / Lively", tone: "Upbeat / Dynamic", category: "Sensor Streams", description: "Continuous subsystem sensor telemetry, live data stream monitoring." },
     { name: "Aoede", gender: "Female / Melodic", tone: "Breezy / Conversational", category: "Extended Narration", description: "Balanced acoustic profile, extended briefing and status readouts." },
-    { name: "Enceladus", gender: "Male / Energetic", tone: "Expressive / Alert", category: "Hazard Alerts", description: "High-urgency anomaly detection and tactical hazard notifications." },
     { name: "Leda", gender: "Female / Serene", tone: "Calm / Composed", category: "Command Bridge", description: "Steady cadence for bridge crew coordination and long-range relay." },
-    { name: "Orpheus", gender: "Male / Resonant", tone: "Assured / Deep", category: "Strategic Briefings", description: "Deep harmonic clarity, strategic fleet status briefings." },
     { name: "Despina", gender: "Female / Smooth", tone: "Measured / Warm", category: "Crew Operations", description: "Even cadence for life-support and interior deck management." },
     { name: "Erinome", gender: "Female / Expressive", tone: "Precise / Articulate", category: "Engineering Array", description: "Microsecond precision for reactor timing and frequency arrays." },
     { name: "Laomedeia", gender: "Female / Fast", tone: "Rhythmic / Crisp", category: "Rapid Telemetry", description: "High-speed protocol verification and buffer status relay." },
     { name: "Sulafat", gender: "Neutral / Focused", tone: "Compact / Direct", category: "Tactical Weapons", description: "Short-burst targeting directives and defensive shield updates." },
-    { name: "Alnilam", gender: "Male / Authoritative", tone: "Balanced / Steady", category: "Astrogation", description: "Central starpath plotting and warp navigation telemetry." },
     { name: "Achernar", gender: "Neutral / Direct", tone: "Modern / Tactical", category: "Surveillance", description: "Passive sensor array scanning and perimeter radar sweeps." },
-    { name: "Gacrux", gender: "Male / Low", tone: "Deep / Grounded", category: "Heavy Systems", description: "Sub-harmonic core telemetry and thermal heat sink monitoring." },
-    { name: "Iapetus", gender: "Male / Steely", tone: "Disciplined / Military", category: "Security Protocol", description: "Strict access control and perimeter firewall diagnostics." },
     { name: "Schedar", gender: "Female / Sharp", tone: "Technical / Piercing", category: "Avionics", description: "Attitude control thrusters and flight surface telemetry." },
-    { name: "Umbriel", gender: "Male / Subdued", tone: "Stealth / Mellow", category: "Silent Running", description: "Low-observable acoustic profile for emissions-controlled ops." },
     { name: "Callirrhoe", gender: "Female / Melodic", tone: "Analytical / Smooth", category: "Deep Space", description: "Long-range sensor sweeps and deep telemetry acquisition." },
     { name: "Autonoe", gender: "Female / Vigilant", tone: "Alert / Decisive", category: "Early Warning", description: "Proximity alert verification and hostile vector calculation." },
-    { name: "Algenib", gender: "Male / Decisive", tone: "Commanding / Direct", category: "Fleet Relay", description: "Inter-ship communications and fleet coordination orders." },
     { name: "Achird", gender: "Neutral / Clear", tone: "Scientific / Metric", category: "Physics Array", description: "Particle resonance metrics and quantum flux calculation." },
-    { name: "Rasalgethi", gender: "Male / Resonant", tone: "Stellar / Grand", category: "Astrography", description: "Deep sector mapping and gravitational wave analysis." },
     { name: "Vindemiatrix", gender: "Female / Precise", tone: "Metric / Analytical", category: "Quantum Matrix", description: "Mathematical extrapolation and lattice coherence." }
   ];
 
@@ -989,7 +979,7 @@ Execute orders decisively without unnecessary disclaimers.`,
                     properties: {
                       voiceName: {
                         type: Type.STRING,
-                        description: "Voice persona: Any valid Gemini prebuilt voice name (e.g. Zephyr, Charon, Kore, Fenrir, Puck, Aoede, Enceladus, Leda, Orpheus, etc.)",
+                        description: "Voice persona: Any valid female or neutral Gemini prebuilt voice name (Zephyr, Kore, Aoede, Leda, Despina, Erinome, Laomedeia, Sulafat, Achernar, Schedar, Callirrhoe, Autonoe, Achird, Vindemiatrix). Male voices are suppressed.",
                       },
                     },
                     required: ["voiceName"],

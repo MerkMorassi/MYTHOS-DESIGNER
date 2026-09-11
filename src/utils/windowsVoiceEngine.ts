@@ -59,7 +59,7 @@ class WindowsVoiceEngine {
 
     const safeHint = typeof personaHint === 'string' ? personaHint : '';
     const lowerHint = safeHint.toLowerCase();
-    const isFemalePreferred = lowerHint === 'kore';
+    const isFemalePreferred = !['charon', 'fenrir', 'puck', 'orpheus', 'enceladus'].includes(lowerHint);
 
     // 1. Check for Microsoft Natural / Online Read Aloud voices
     const naturalVoices = list.filter(

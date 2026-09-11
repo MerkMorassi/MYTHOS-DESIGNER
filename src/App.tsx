@@ -369,7 +369,12 @@ export default function App() {
       }
     } else if (name === 'changeVoice') {
       const v = String(args.voiceName || '');
-      if (['Charon', 'Kore', 'Fenrir', 'Puck', 'Zephyr'].includes(v)) {
+      const allowedFemaleOrNeutralVoices = [
+        'Zephyr', 'Kore', 'Aoede', 'Leda', 'Despina', 'Erinome', 
+        'Laomedeia', 'Sulafat', 'Achernar', 'Schedar', 'Callirrhoe', 
+        'Autonoe', 'Achird', 'Vindemiatrix'
+      ];
+      if (allowedFemaleOrNeutralVoices.includes(v)) {
         try {
           localStorage.setItem('mythos_voice', v);
         } catch (e) {
